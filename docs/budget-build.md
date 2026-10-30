@@ -85,16 +85,20 @@ ESP32-CAM. Keep Wi-Fi off in flight; its current spikes brown out 1S systems.
 
 ### Flight controller setup (Betaflight Configurator)
 
-1. Ports tab: enable "Serial RX" on the UART your ESP32 TX is wired to.
-2. Configuration tab: Receiver mode "MSP RX input" (CLI: `set receiver_type = MSP` on
-   4.4+, or `feature RX_MSP` on older firmware). Save.
+1. Ports tab: enable "MSP" on the UART your ESP32 TX is wired to (it is an MSP stream,
+   not a serial receiver protocol).
+2. CLI: `feature RX_MSP` with no serial receiver configured, then `save`. Betaflight's
+   companion-computer guide is the reference for this; if you also own a radio and
+   receiver, read the "override" variant in `existing-drones.md` instead, which keeps
+   your radio as a safety pilot.
 3. Modes tab: ARM on AUX1 range 1700 to 2100. ANGLE on AUX2 range 1700 to 2100, or
    simply make ANGLE the default by not assigning ACRO.
 4. CLI: `set small_angle = 180` (lets it arm on a slightly tilted floor),
    `set motor_pwm_protocol = BRUSHED`, `set motor_pwm_rate = 16000` (quieter than 8 kHz),
    `set failsafe_delay = 5` so a lost MSP stream drops the motors in 0.5 s. Save.
 5. Receiver tab with the ESP32 connected: you should see sticks centred and throttle
-   low, and the AUX1 bar move when you long-press the button. Props off for all of this.
+   low, and the AUX1 bar move when you long-press the button. Unplug the ESP32's TX wire
+   and confirm the FC shows failsafe within a second. Props off for all of this.
 
 ### Camera setup
 

@@ -27,9 +27,17 @@ throttle to hold 1.2 m. It sends those stick positions to Betaflight over a seri
 pretending to be a radio receiver. Long-press a button to take off, short-press to land,
 and it lands by itself after 4 minutes or if it loses the band for 10 s.
 
+## Already own a drone, or want to buy one instead of building?
+
+See `docs/existing-drones.md`. Short version: any Betaflight tiny whoop (75 mm is best)
+takes our tracker with two wires; a used Tello needs no hardware changes at all and runs
+`tools/tello_follow.py` from a laptop; ESP32 hobby drones (LiteWing, ESP-FLY) work but
+need more firmware work; the Crazyflie is lovely and four times the budget.
+
 ## Repository layout
 
 ```
+docs/existing-drones.md       Drones you can modify instead, with prices and recipes
 docs/budget-build.md          Budget design, pin map, Betaflight setup, tuning order, limits
 docs/architecture.md          Full UWB + ArduPilot design
 docs/acoustics-and-power.md   Why quiet and efficient come from the same choices
@@ -41,6 +49,7 @@ firmware/drone-esp32cam/      Budget firmware for the ESP32-CAM (PlatformIO)
 firmware/wristband/           Optional ESP32-C3 wristband (UWB tag for the full build)
 firmware/companion/           Python: full-build follow controller AND the tested
                               reference for the budget follow logic (follow/visual.py)
+tools/tello_follow.py         Laptop-side follow for a Ryze/DJI Tello (no drone mods)
 ```
 
 ## Quick start
