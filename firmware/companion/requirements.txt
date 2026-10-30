@@ -1,0 +1,3 @@
+pytest>=8
+# Only needed on the drone / for SITL, not for the simulator or tests:
+# pymavlink>=2.4
