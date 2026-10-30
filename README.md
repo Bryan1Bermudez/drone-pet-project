@@ -2,57 +2,72 @@
 
 A small, quiet, low-power drone that follows one person wearing a wristband.
 
-## Goal (phase 1)
+Two tracks live in this repository:
 
-Build or modify a small quadcopter so that it:
+| | **Budget demo (start here)** | Full build (later) |
+|---|---|---|
+| Cost | **under 100 USD** with a 3D printer | ~450 USD |
+| Drone | printed 100 mm frame, brushed motors, Betaflight whoop board | 7-inch brushless, ArduPilot |
+| Finds the wearer by | camera tracking a glowing LED wristband | ultra-wideband radio ranging |
+| Works | indoors, dusk, shade; 1 to 4 m | outdoors in daylight; 100 m+ |
+| Brains | ESP32-CAM (C++) | Raspberry Pi companion (Python) |
+| Docs | `docs/budget-build.md`, `hardware/bom-budget.md` | `docs/architecture.md`, `hardware/bom.md` |
 
-1. Tracks a single wearer by the **wristband they carry**, not by camera or face.
-2. Keeps a fixed follow offset (default: 3 m behind, 2.5 m up).
-3. Is **as quiet as practical** (target ≤ 55 dBA at 3 m while hovering).
-4. Runs **as long as practical** on a small battery (target ≥ 20 min hover).
-5. Fails safe: lands or returns home on lost link, low battery, or geofence breach.
+Both share the same idea for being quiet: move lazily. Deadbands and rate limits keep
+the motors at a steady hum instead of chasing every twitch of the sensor.
 
-Later phases (not in scope now): self-landing on a charging dock, photo/video capture,
-gesture commands from the wristband, multi-wearer support.
+## Budget demo in one paragraph
 
-## How it works in one paragraph
-
-The wristband is an ESP32 with an ultra-wideband (UWB) radio. The drone carries two UWB
-modules spaced apart on its arms. Two-way ranging gives distance to the band, and the
-range difference between the two modules gives bearing. A companion board on the drone
-fuses those with the flight controller's own attitude, altitude, and GPS, computes where
-the wearer is, and sends position setpoints to an ArduPilot flight controller over MAVLink.
-Bluetooth Low Energy (BLE) from the same wristband carries battery level, a "pause" button,
-and acts as a coarse RSSI fallback if UWB drops out. The follow loop is deliberately lazy
-(deadbands and rate limits) so the drone glides rather than twitches, which is both quieter
-and cheaper on battery.
+The wristband is a printed cuff with three bright green LEDs on coin cells. The drone is
+a printed X-frame with prop guards carrying four 8.5 mm coreless motors, a 1S Betaflight
+flight controller, an ESP32-CAM, and a 3 USD laser rangefinder pointing at the floor.
+The ESP32-CAM runs the camera at low exposure so only the LEDs are visible, finds the
+blob, and steers: yaw to keep it centred, pitch to keep its apparent size (distance),
+throttle to hold 1.2 m. It sends those stick positions to Betaflight over a serial line,
+pretending to be a radio receiver. Long-press a button to take off, short-press to land,
+and it lands by itself after 4 minutes or if it loses the band for 10 s.
 
 ## Repository layout
 
 ```
-docs/                     Design notes: architecture, hardware, acoustics & power, safety
-hardware/                 Bill of materials and wiring
-firmware/wristband/       ESP32 + DW3000 beacon (PlatformIO / Arduino framework)
-firmware/companion/       Python follow controller that runs on the drone's companion board
-firmware/companion/tests  pytest suite with a kinematic simulator
+docs/budget-build.md          Budget design, pin map, Betaflight setup, tuning order, limits
+docs/architecture.md          Full UWB + ArduPilot design
+docs/acoustics-and-power.md   Why quiet and efficient come from the same choices
+docs/roadmap.md               Phases
+hardware/bom-budget.md        Shopping list under 100 USD
+hardware/bom.md               Full build shopping list
+hardware/print/               OpenSCAD frame with prop guards and LED wristband cuff
+firmware/drone-esp32cam/      Budget firmware for the ESP32-CAM (PlatformIO)
+firmware/wristband/           Optional ESP32-C3 wristband (UWB tag for the full build)
+firmware/companion/           Python: full-build follow controller AND the tested
+                              reference for the budget follow logic (follow/visual.py)
 ```
 
-## Quick start (companion controller, desktop simulation)
+## Quick start
+
+Software only, on your computer:
 
 ```bash
 cd firmware/companion
 python3 -m pip install -r requirements.txt
-python3 -m pytest -q
-python3 -m follow.sim          # runs a 60 s simulated follow and prints a summary
+python3 -m pytest -q              # 49 tests: estimator, controllers, safety, protocols
+python3 -m follow.sim             # full-build simulator summary
 ```
+
+Hardware, budget track:
+
+1. Print `hardware/print/frame.scad` and `wristband.scad` (export to STL with OpenSCAD).
+2. Order parts from `hardware/bom-budget.md`.
+3. Follow `docs/budget-build.md`: wiring and pin map, Betaflight configuration, then
+   flash `firmware/drone-esp32cam` with PlatformIO.
+4. Tune in the order the doc gives: height only, then yaw, then distance.
 
 ## Status
 
-- [x] Architecture, hardware selection, and BOM
-- [x] Follow controller with estimator, deadband controller, safety monitor, simulator
-- [x] Wristband firmware skeleton (UWB tag + BLE advertiser + button)
-- [ ] Companion MAVLink adapter tested against ArduPilot SITL
-- [ ] First tethered hover test
-- [ ] Acoustic and endurance measurements against targets
+- [x] Budget design, BOM, printable frame and wristband, ESP32-CAM firmware
+- [x] Follow logic tested in Python, C++ port compiled and checked against the same model
+- [ ] First flight of the budget drone: hover tuning, then follow tuning
+- [x] Full-build design, BOM, UWB estimator and controller with simulator
+- [ ] Full build hardware
 
-See `docs/architecture.md` for the full design and `docs/roadmap.md` for phases.
+Later: self-landing on a charging dock, photos, gesture commands. See `docs/roadmap.md`.

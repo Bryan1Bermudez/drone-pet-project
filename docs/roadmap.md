@@ -1,34 +1,42 @@
 # Roadmap
 
-## Phase 1: silent follow (this repository's current scope)
+## Phase 1a: budget demo (under 100 USD)
+
+- [x] Design, BOM, pin map, Betaflight setup notes
+- [x] OpenSCAD frame with prop guards, LED wristband cuff
+- [x] ESP32-CAM firmware: blob tracker, height hold, follow state machine, MSP output
+- [x] Follow logic unit-tested in Python and mirrored in C++
+- [ ] Print and assemble; weigh the frame (target under 12 g)
+- [ ] Bench: button arms/disarms, sticks move in Betaflight's Receiver tab
+- [ ] Height-hold flight, tune hover throttle and PD gains
+- [ ] Yaw-only follow, then add pitch (distance)
+- [ ] Measure flight time per pack, set the flight timer
+- [ ] Record a demo video
+
+## Phase 1b: full build (UWB + ArduPilot)
 
 - [x] Design docs, BOM
 - [x] Follow controller (estimator, controller, safety) with simulator and tests
-- [x] Wristband firmware skeleton
-- [ ] UWB ranging bring-up between the band and one anchor on the bench
-- [ ] Two-anchor bearing test on the bench, verify sign and resolution
+- [x] Wristband UWB tag firmware skeleton
+- [ ] UWB ranging bring-up on the bench
 - [ ] Companion MAVLink adapter against ArduPilot SITL
-- [ ] Airframe build, prop balancing, first hover (tethered)
-- [ ] Acoustic measurement, pick final motor/prop combo
-- [ ] Endurance measurement
-- [ ] Field follow test with a walking wearer
+- [ ] Airframe build, acoustic and endurance measurements, field test
 
 ## Phase 2: self-landing on a charging dock
 
-- Precision landing with a downward camera or IR beacon on the dock
-- Dock design with contact or wireless charging
+- Precision landing with the downward camera or an IR beacon on the dock
+- Dock with contact or wireless charging
 - Automatic take-off when the band leaves a home radius
 
 ## Phase 3: capture and interaction
 
-- Camera module, photo on wristband button press
-- Short video clips when the wearer stops moving
-- Gesture or double-tap commands from the band's IMU
-- Mobile app for configuration and media download
+- Photo on wristband button press (the ESP32-CAM already has the camera)
+- Short clips when the wearer stops moving
+- Gesture or double-tap commands from an IMU on the band
+- Phone app for configuration and media download
 
 ## Phase 4: hardening
 
-- Third UWB anchor to remove front/back ambiguity
-- Barometer on the band for wearer altitude
-- Obstacle avoidance (rangefinders or stereo camera)
-- Multi-wearer handoff
+- Optical flow for position hold (budget) / third UWB anchor (full)
+- IR LEDs + IR camera for daylight (budget) / barometer on the band (full)
+- Obstacle avoidance

@@ -1,4 +1,6 @@
-# Bill of materials (phase 1)
+# Bill of materials: full build (phase 1b, ~450 USD)
+
+For the under-100 USD student demo see `bom-budget.md`.
 
 Prices are rough 2026 hobby-retail figures and will vary. Quantities are per build.
 
