@@ -43,6 +43,7 @@ docs/existing-drones.md       Drones you can modify instead, with prices and rec
 docs/budget-build.md          Budget design, pin map, Betaflight setup, tuning order, limits
 docs/architecture.md          Full UWB + ArduPilot design
 docs/acoustics-and-power.md   Why quiet and efficient come from the same choices
+docs/current-plan.md          Start here: decisions so far and next tasks
 docs/roadmap.md               Phases
 hardware/bom-budget.md        Shopping list under 100 USD
 hardware/bom.md               Full build shopping list
