@@ -8,7 +8,7 @@ Two tracks live in this repository:
 |---|---|---|
 | Cost | **under 100 USD** with a 3D printer | ~450 USD |
 | Drone | printed 100 mm frame, brushed motors, Betaflight whoop board | 7-inch brushless, ArduPilot |
-| Finds the wearer by | camera tracking a glowing LED wristband | ultra-wideband radio ranging |
+| Finds the wearer by | camera tracking a wristband LED that blinks a code (UWB next) | ultra-wideband radio ranging |
 | Works | indoors, dusk, shade; 1 to 4 m | outdoors in daylight; 100 m+ |
 | Brains | ESP32-CAM (C++) | Raspberry Pi companion (Python) |
 | Docs | `docs/budget-build.md`, `hardware/bom-budget.md` | `docs/architecture.md`, `hardware/bom.md` |
@@ -18,11 +18,13 @@ the motors at a steady hum instead of chasing every twitch of the sensor.
 
 ## Budget demo in one paragraph
 
-The wristband is a printed cuff with three bright green LEDs on coin cells. The drone is
-a printed X-frame with prop guards carrying four 8.5 mm coreless motors, a 1S Betaflight
-flight controller, an ESP32-CAM, and a 3 USD laser rangefinder pointing at the floor.
-The ESP32-CAM runs the camera at low exposure so only the LEDs are visible, finds the
-blob, and steers: yaw to keep it centred, pitch to keep its apparent size (distance),
+The wristband is a printed cuff with an ESP32-C3 that blinks three LEDs (green, or
+infrared for an invisible beacon) at a fixed rate. The drone only follows a light
+blinking that exact rhythm, so traffic lights, screens and reflections are ignored.
+The same wristband takes a UWB radio module later. The drone is a printed X-frame with
+prop guards carrying four 8.5 mm coreless motors, a 1S Betaflight flight controller, an ESP32-CAM, and a 3 USD laser rangefinder pointing at the floor.
+The ESP32-CAM runs the camera at low exposure so only lights are visible, picks out the
+one blinking the wristband's code, and steers: yaw to keep it centred, pitch to keep its apparent size (distance),
 throttle to hold 1.2 m. It sends those stick positions to Betaflight over a serial line,
 pretending to be a radio receiver. Long-press a button to take off, short-press to land,
 and it lands by itself after 4 minutes or if it loses the band for 10 s.
@@ -46,7 +48,7 @@ hardware/bom-budget.md        Shopping list under 100 USD
 hardware/bom.md               Full build shopping list
 hardware/print/               OpenSCAD frame with prop guards and LED wristband cuff
 firmware/drone-esp32cam/      Budget firmware for the ESP32-CAM (PlatformIO)
-firmware/wristband/           Optional ESP32-C3 wristband (UWB tag for the full build)
+firmware/wristband/           ESP32-C3 wristband: blinking beacon + BLE now, UWB tag later
 firmware/companion/           Python: full-build follow controller AND the tested
                               reference for the budget follow logic (follow/visual.py)
 tools/tello_follow.py         Laptop-side follow for a Ryze/DJI Tello (no drone mods)
@@ -59,11 +61,11 @@ Software only, on your computer:
 ```bash
 cd firmware/companion
 python3 -m pip install -r requirements.txt
-python3 -m pytest -q              # 49 tests: estimator, controllers, safety, protocols
+python3 -m pytest -q              # 63 tests: estimator, controllers, blink filter, safety
 python3 -m follow.sim             # full-build simulator summary
 ```
 
-Hardware, budget track:
+Hardware, budget track (about 95 USD):
 
 1. Print `hardware/print/frame.scad` and `wristband.scad` (export to STL with OpenSCAD).
 2. Order parts from `hardware/bom-budget.md`.
@@ -74,6 +76,8 @@ Hardware, budget track:
 ## Status
 
 - [x] Budget design, BOM, printable frame and wristband, ESP32-CAM firmware
+- [x] Coded blinking beacon that ignores other lights (Python tests + C++ port checked)
+- [ ] UWB on the budget drone (planned next phase)
 - [x] Follow logic tested in Python, C++ port compiled and checked against the same model
 - [ ] First flight of the budget drone: hover tuning, then follow tuning
 - [x] Full-build design, BOM, UWB estimator and controller with simulator

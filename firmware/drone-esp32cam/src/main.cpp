@@ -10,6 +10,7 @@
 
 #include "camera_config.h"
 #include "blob_tracker.h"
+#include "blink_filter.h"
 #include "follow_logic.h"
 #include "msp.h"
 
@@ -29,6 +30,23 @@ static const int PIN_STATUS_LED = 33;  // on-board red LED, active low
 #ifndef FOLLOW_ENABLED
 #define FOLLOW_ENABLED 1
 #endif
+// 0 = green LEDs on the wristband, 1 = infrared LEDs (needs a camera lens without IR-cut).
+#ifndef BEACON_IR
+#define BEACON_IR 0
+#endif
+// Must match BLINK_HZ in the wristband firmware.
+#ifndef BEACON_BLINK_HZ
+#define BEACON_BLINK_HZ 2.5f
+#endif
+
+static const BlobColour &beacon_colour() { return BEACON_IR ? BLOB_IR : BLOB_GREEN; }
+
+static BlinkConfig make_blink_config() {
+  BlinkConfig c;
+  c.blink_hz = BEACON_BLINK_HZ;
+  return c;
+}
+static BlinkTracker blink(make_blink_config());
 
 static HardwareSerial fc_serial(1);
 static MspSender msp(fc_serial);
@@ -77,8 +95,9 @@ static bool read_height(float &h_m) {
 #include <WebServer.h>
 static WebServer web(80);
 static Blob last_blob;
+static bool last_found = false;
 static void handle_root() {
-  String s = "cx=" + String(last_blob.cx, 2) + " cy=" + String(last_blob.cy, 2) +
+  String s = "beacon=" + String(last_found ? 1 : 0) + " cx=" + String(last_blob.cx, 2) + " cy=" + String(last_blob.cy, 2) +
              " area=" + String(last_blob.area_frac, 5) + " px=" + String(last_blob.pixels) +
              " state=" + follow_state_name(follower.state()) +
              " h=" + String(follower.last_height(), 2) + "\n";
@@ -135,14 +154,21 @@ void loop() {
   static RcOut rc;
 
   // One cycle per camera frame (~20 Hz at QQVGA with manual exposure).
+  // Every bright blob goes to the blink filter, which only reports the one blinking
+  // the wristband's code (traffic lights, screens and glints are ignored).
   camera_fb_t *fb = esp_camera_fb_get();
   Blob blob = {};
+  bool blob_found = false;
+  int n_blobs = 0;
   if (fb) {
-    blob = find_blob(fb->buf, fb->width, fb->height, BLOB_GREEN, 6);
+    Blob blobs[8];
+    n_blobs = find_blobs(fb->buf, fb->width, fb->height, beacon_colour(), 4, blobs, 8);
     esp_camera_fb_return(fb);
+    blob_found = blink.update(millis() / 1000.0f, blobs, n_blobs, &blob);
   }
 #if DEBUG_STREAM
   last_blob = blob;
+  last_found = blob_found;
   web.handleClient();
 #endif
 
@@ -152,7 +178,7 @@ void loop() {
 
   Observation o;
   o.t = millis() / 1000.0f;
-  o.blob_found = FOLLOW_ENABLED ? blob.found : false;
+  o.blob_found = FOLLOW_ENABLED ? blob_found : false;
   o.cx = blob.cx;
   o.cy = blob.cy;
   o.area_frac = blob.area_frac;
@@ -189,8 +215,8 @@ void loop() {
   static uint32_t last_log_ms = 0;
   if (now - last_log_ms >= 500) {
     last_log_ms = now;
-    Serial.printf("%s h=%.2f%s blob=%d cx=%.2f area=%.4f thr=%d yaw=%d pitch=%d\n",
-                  follow_state_name(rc.state), h, h_ok ? "" : "!", blob.found, blob.cx,
-                  blob.area_frac, rc.throttle, rc.yaw, rc.pitch);
+    Serial.printf("%s h=%.2f%s blobs=%d tracks=%d beacon=%d cx=%.2f area=%.4f thr=%d yaw=%d pitch=%d\n",
+                  follow_state_name(rc.state), h, h_ok ? "" : "!", n_blobs, blink.active_tracks(),
+                  blob_found, blob.cx, blob.area_frac, rc.throttle, rc.yaw, rc.pitch);
   }
 }

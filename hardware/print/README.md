@@ -20,9 +20,11 @@ is heavier than 12 g, lower `arm_w` or `guard_h` a little.
 
 ## wristband.scad
 
-An open cuff with three 5 mm LED pockets across the top and a cradle for a two-cell
-CR2032 holder on the inside. Print in flexible TPU for comfort, or PLA with the cuff
-split and a Velcro strap through the two slots.
+An open cuff with three 5 mm LED pockets across the top and an electronics bay for the
+ESP32-C3 board, a small 1S LiPo and its USB-C charger (wiring in
+`docs/budget-build.md`). Print in flexible TPU for comfort, or PLA with the cuff split
+and a Velcro strap through the two slots. For the UWB upgrade, raise `holder_h` by about
+4 mm to fit the DW3000 module and reprint.
 
 Point the LEDs outward/upward: the drone looks down at you from about 1.2 m.
 

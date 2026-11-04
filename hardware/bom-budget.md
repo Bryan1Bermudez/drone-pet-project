@@ -7,7 +7,7 @@ Buy the flight controller and motors from the same shop so the connectors match.
 
 | Qty | Item | Why this one | ~USD |
 |---|---|---|---|
-| 1 | 1S brushed Betaflight flight controller, F4, with 4 motor ports and PH2.0 battery lead (for example "Crazybee F4 Lite 1S brushed", "BetaFPV F4 1S brushed" or an unbranded "whoop F4 brushed FC") | Runs Betaflight, accepts MSP receiver input over UART, has an accelerometer/gyro, weighs ~4 g. Avoid boards with a built-in VTX; you will not use it and it costs money. | 22 |
+| 1 | 1S brushed Betaflight flight controller, F4, with 4 motor ports and PH2.0 battery lead (for example BetaFPV "Matrix 1S brushed" or "F4 1S brushed", or an unbranded "whoop F4 brushed FC") | Runs Betaflight, accepts MSP receiver input over UART, has an accelerometer/gyro, weighs ~4 g. Avoid boards with a built-in VTX; you will not use it and it costs money. | 35 |
 | 4 | 8.5 x 20 mm coreless brushed motors, 2 CW + 2 CCW, with 1.0 mm shaft (sold as 4-packs) | Quiet, cheap, 25 to 30 g thrust each on 65 mm props. | 10 |
 | 2 sets | 65 mm two-blade props for 1.0 mm shaft (one spare set) | Two blades and the largest diameter the frame allows: quietest option. | 3 |
 | 2 | 1S 600 mAh LiPo, PH2.0 connector, 30C+ | 4 to 6 min each. Two packs let you fly while one charges. | 10 |
@@ -19,28 +19,40 @@ Buy the flight controller and motors from the same shop so the connectors match.
 | 1 | 6 x 6 mm tactile button | Arm / land. | 0.2 |
 | 1 | 30 AWG silicone wire assortment, heat shrink, a few M2 x 6 screws | | 4 |
 | | Filament for the frame and guards (~25 g PLA or PETG) | | 1 |
-| | **Drone subtotal** | | **~70** |
+| | **Drone subtotal** | | **~83** |
 
 ## Wristband
 
 | Qty | Item | ~USD |
 |---|---|---|
-| 3 | 5 mm high-brightness green LEDs (15,000 mcd or more, clear lens) | 1 |
-| 3 | 100 ohm resistors (one per LED, 2 cells in series = 6 V) | 0.1 |
-| 1 | 2 x CR2032 holder with slide switch | 1.5 |
-| 2 | CR2032 cells | 1 |
+| 1 | ESP32-C3 "super mini" board (often sold in 3-packs for ~10 USD) | 4 |
+| 1 | 1S LiPo, 300 to 500 mAh, flat pouch (for example 402030 or 502030) | 5 |
+| 1 | TP4056 USB-C charger board with protection | 1 |
+| 1 | AO3400 N-MOSFET (SOT-23) or a 2N7000, plus 1 kΩ gate resistor | 0.5 |
+| 3 | 5 mm LEDs: high-brightness green (stock camera), or 850/940 nm infrared (NoIR camera) | 1 |
+| 3 | 47 Ω LED resistors (suits both green and infrared) | 0.1 |
+| 2 | 100 kΩ resistors for the battery divider | 0.1 |
+| 1 | 6 x 6 mm tactile button | 0.2 |
 | | Filament for the cuff | 0.5 |
-| | **Wristband subtotal** | **~4** |
+| | **Wristband subtotal** | **~12** |
 
-## Total: about 75 USD, leaving ~25 USD for shipping, a spare motor set, or the upgrades below
+Infrared only: an OV2640 lens module without IR-cut filter for the ESP32-CAM, ~5 USD.
+
+The same ESP32-C3 later takes the DW3000 UWB module (~28 USD), so nothing here is
+thrown away when the project moves to UWB.
+
+## Total: about 95 USD (drone ~83 + wristband ~12), before shipping
+
+Earlier versions of this list assumed a 20 to 25 USD flight controller. In late 2026
+the BetaFPV brushed boards were listed at about 35 USD and showed as unavailable on
+Amazon, so budget for that.
 
 ## Optional upgrades, in the order they help most
 
 | Item | ~USD | What it fixes |
 |---|---|---|
 | PMW3901 optical flow breakout | 10 | Sideways drift: gives the roll axis something to hold against. |
-| ESP32-C3 "super mini" for the wristband | 3 | Blinking LED pattern for far more robust detection, BLE pause/land button. |
-| 940 nm IR LEDs + "night vision" OV2640 lens (IR filter removed) | 3 | Daylight use. |
+| DW3000 UWB modules (3: one on the band, two on the drone) | ~85 | The planned next step: radio ranging and bearing, no light needed. |
 | Second 1S charger port / more batteries | 5 each | More flying per session. |
 
 ## Tools you need

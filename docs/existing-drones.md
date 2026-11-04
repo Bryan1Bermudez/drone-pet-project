@@ -112,7 +112,7 @@ Bench check from the Betaflight guide: send a known stick pattern and read it ba
 
 1. If a friend or a local FPV group has a retired 75 mm Betaflight whoop: option A, with a
    XIAO ESP32S3 Sense. Total new spend about 25 USD.
-2. Otherwise the printed brushed build in `budget-build.md` (about 75 USD) remains the best
+2. Otherwise the printed brushed build in `budget-build.md` (about 95 USD) remains the best
    value and the quietest.
 3. If you want a demo this week with no soldering and can find a used Tello under 80 USD:
    option C, then move the same logic onto the budget drone.

@@ -1,4 +1,7 @@
-// LED beacon wristband: open cuff, three 5 mm LED pockets, 2xCR2032 holder cradle.
+// LED beacon wristband: open cuff, three 5 mm LED pockets, electronics bay.
+// The bay holds an ESP32-C3 super mini (22.5 x 18 mm) stacked over a 1S LiPo
+// (402030 or 502030) with a TP4056 charger alongside; leave the USB-C ports at the
+// open end. Room is left for a DW3000 UWB module later (increase holder_h by ~4 mm).
 // Print in TPU for a flexible cuff, or PLA and use the strap slots.
 
 wrist_w      = 62;    // inner width (across the wrist)
@@ -8,9 +11,9 @@ band_w       = 24;    // band width along the arm
 opening_deg  = 70;    // gap on the underside so it slips on
 led_d        = 5.2;
 led_spacing  = 9;
-holder_w     = 22;    // 2xCR2032 holder with switch: ~ 22 x 36 x 7, check yours
-holder_l     = 36;
-holder_h     = 7.5;
+holder_w     = 26;    // electronics bay inner width
+holder_l     = 46;    // inner length: ESP32-C3 + TP4056 end to end over the battery
+holder_h     = 10;    // inner depth: battery + board + wiring
 
 $fn = 96;
 
@@ -39,7 +42,7 @@ module led_pockets() {
 }
 
 module holder_cradle() {
-    // sits on the top outer face beside the LEDs, open at the top so the holder slides in
+    // sits on the top outer face beside the LEDs, open at the top so the electronics slide in
     translate([-holder_w / 2 - 1.2, wrist_h / 2 + band_t - 0.5, -holder_l / 2 + band_w / 2])
         difference() {
             cube([holder_w + 2.4, holder_h + 1.7, holder_l + 2.4]);

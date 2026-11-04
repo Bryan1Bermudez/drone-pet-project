@@ -2,22 +2,24 @@
 
 This is the recommended starting point. It trades range and precision for cost and
 simplicity, and it is a complete, demonstrable project on its own: a palm-sized quiet
-brushed quadcopter that takes off, finds a glowing wristband with its camera, and
+brushed quadcopter that takes off, finds a blinking wristband with its camera, and
 follows the wearer around a room or a yard at dusk.
 
-The full UWB + ArduPilot design in `architecture.md` stays as the upgrade path once the
-demo works and you want outdoor range in daylight.
+The wristband blinks a fixed code, so traffic lights, brake lights, screens and
+reflections are ignored (see "The blinking beacon" below). The planned upgrade is
+ultra-wideband (UWB) radio ranging: the same wristband board takes a UWB module, and the
+estimator for it already exists in `firmware/companion` (see `architecture.md`).
 
 ## What changes versus the full design
 
 | | Full design | Budget demo |
 |---|---|---|
 | Airframe | 7-inch brushless, ~600 g | 3D-printed 100 mm frame, 8.5 mm brushed motors, ~65 g |
-| Flight controller | ArduPilot F4/F7, ~50 USD | 1S brushed Betaflight whoop board, ~20 to 25 USD |
+| Flight controller | ArduPilot F4/F7, ~50 USD | 1S brushed Betaflight whoop board, ~35 USD |
 | Companion computer | Raspberry Pi Zero 2 W | ESP32-CAM, ~8 USD (it is also the camera) |
-| Finding the wearer | UWB two-anchor ranging | Camera tracks a bright LED on the wristband |
+| Finding the wearer | UWB two-anchor ranging | Camera tracks a blinking LED beacon on the wristband |
 | Height | GPS + barometer | VL53L0X laser rangefinder pointing down, ~3 USD |
-| Wristband | ESP32-C3 + UWB tag | 3 bright LEDs + coin cells in a printed cuff (ESP32-C3 optional) |
+| Wristband | ESP32-C3 + UWB tag | ESP32-C3 blinking 3 LEDs (green or infrared), 1S LiPo, printed cuff; add UWB later |
 | Where it works | Outdoors, 100 m+ | Indoors or dusk/shade, 1 to 4 m |
 | Endurance | ~20 min | 4 to 6 min per battery |
 
@@ -30,7 +32,8 @@ hum rather than the scream of a brushless 5-inch. The same lazy-controller ideas
 ```
 ESP32-CAM (one chip does everything on the companion side)
   ├─ Camera 160x120 RGB565 at ~20 fps, exposure turned down so only the LED is bright
-  ├─ Blob tracker: centroid x,y and pixel count of the LED colour
+  ├─ Blob finder: every LED-coloured blob in the frame (blob_tracker.cpp)
+  ├─ Blink filter: keeps only the blob blinking the wristband's code (blink_filter.cpp)
   ├─ VL53L0X over I2C: height above floor, 30 Hz
   ├─ Follow logic (follow_logic.cpp, mirrored by follow/visual.py with tests)
   │     yaw      <- keep the blob centred horizontally
@@ -100,14 +103,56 @@ ESP32-CAM. Keep Wi-Fi off in flight; its current spikes brown out 1S systems.
    low, and the AUX1 bar move when you long-press the button. Unplug the ESP32's TX wire
    and confirm the FC shows failsafe within a second. Props off for all of this.
 
+### The blinking beacon
+
+A colour threshold alone also matches traffic lights, brake lights, phone screens and
+sun glints. So the wristband blinks its LEDs at 2.5 Hz, 50 % duty, and the drone only
+follows a blob whose on/off sequence is phase-locked to that rhythm. Steady lights never
+change state, mains-powered lights flicker too fast to form the pattern, and random
+glints are irregular. In tests the filter followed the band through 15 % missed frames
+and never locked onto a steady or randomly flickering light in 900 simulated runs. It
+takes about 2.5 s to lock on after the band first appears.
+
+The blink rate must match on both sides: `BLINK_HZ` in `firmware/wristband/platformio.ini`
+and `BEACON_BLINK_HZ` in `firmware/drone-esp32cam/platformio.ini`.
+
+**Green or infrared.** Green LEDs work with the stock ESP32-CAM lens and with a Tello.
+Infrared LEDs are invisible to people and most street lighting gives off little of it,
+but the camera needs a lens module without an IR-cut filter (sold as "night vision" or
+"NoIR" OV2640 modules, about 5 USD). Use 850 nm LEDs if you can tolerate a faint red
+glow: the OV2640 is several times more sensitive at 850 nm than at 940 nm, which is
+fully invisible but gives a shorter range. Set `BEACON_IR=1` in the drone firmware for
+either infrared option. Sunlight contains a lot of infrared, so daylight is still hard
+either way; the blink filter keeps glints from being followed, but the beacon still has
+to stand out from the background.
+
+### Wristband wiring
+
+```
+1S LiPo (300 to 500 mAh) ── TP4056 USB-C charger board ── ESP32-C3 super mini (5V pin)
+                                                      └── 2:1 divider ── GPIO0 (battery %)
+GPIO1 ── 1 kΩ ── gate  AO3400 N-MOSFET  source ── GND
+                       drain ── LED cathodes
+LiPo + ── 47 Ω ── LED anode   (one resistor per LED, 3 LEDs, same value for both kinds)
+             green 5 mm (Vf ~3.0 V): 15 to 25 mA over the battery's 3.7 to 4.2 V
+             IR 850/940 nm (Vf ~1.4 V): 50 to 60 mA (pulsed at 50 %, within a 100 mA rating)
+GPIO9 ── button ── GND        (pause: short press, land: long press)
+```
+
+The MOSFET lets the LEDs run from the battery at full brightness instead of from a GPIO
+pin. Average draw is roughly 25 mA for the ESP32-C3 plus 30 mA (green) or 80 mA
+(infrared) for the three LEDs at 50 % duty, so a 400 mAh cell lasts about 7 hours green
+or 4 hours infrared.
+Leave GPIO4 to 7 and 10 free: the UWB module will use them later.
+
 ### Camera setup
 
 In `camera_config.h` the sensor is forced to manual exposure with a low value, gain
 low, saturation high. The goal is a mostly black image with the LED as the only bright
 saturated blob. Open the debug stream (`DEBUG_STREAM` build flag turns on Wi-Fi and a
 tiny MJPEG page, bench only) and adjust `AEC_VALUE` until the room disappears and the
-band stays. Choose an LED colour that your room does not contain; green is the default
-because high-brightness green 5 mm LEDs are cheap and bright.
+band stays. Other bright lights are fine; the blink filter discards them. The status
+page shows `beacon=1` once the band is locked.
 
 ## Tuning order
 
@@ -125,8 +170,11 @@ because high-brightness green 5 mm LEDs are cheap and bright.
 
 - No position hold: the drone drifts sideways with air currents because there is no
   lateral sensing. Upgrade: PMW3901 optical flow sensor (~10 USD) for the roll axis.
-- Daylight: the LED must out-shine the scene. Upgrade: 940 nm IR LEDs on the band and
-  the camera's IR filter removed (a 1 USD "night" OV2640 lens module does this).
+- Daylight: the beacon must still out-shine the scene, even though the blink filter
+  stops the drone from following other lights. Upgrade: infrared LEDs and a NoIR lens
+  (see above), and ultimately UWB, which does not care about light at all.
 - Distance is estimated from blob size, so it is coarse. Upgrade: a second LED on the
   band at known spacing gives true range from the pixel distance between them.
-- Range is a few metres. Upgrade: the UWB design in `architecture.md`.
+- Range is a few metres. Upgrade: UWB (planned next). Add a DW3000 module to the same
+  wristband board and build `pio run -e uwb`; two more modules go on the drone. The
+  range and bearing estimator is in `firmware/companion/follow/estimator.py`.

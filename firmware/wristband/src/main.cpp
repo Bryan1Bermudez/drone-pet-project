@@ -1,10 +1,13 @@
-// Wristband firmware: UWB tag + BLE status beacon + button.
+// Wristband firmware: blinking camera beacon + BLE status + button, UWB optional.
 //
 // Responsibilities
-//   1. Answer UWB ranging polls from the drone's anchors (two-way ranging, tag side).
+//   1. Blink the beacon LEDs at BLINK_HZ, 50 % duty. The drone's camera follows only a
+//      light blinking at exactly this rate, which rejects traffic lights, brake lights,
+//      screens and reflections (see firmware/companion/follow/blink.py).
 //   2. Advertise over BLE once per second: band id, battery %, button state.
 //   3. Debounce the button: short press toggles PAUSE, long press (>2 s) requests LAND.
-//   4. Light-sleep between events to keep average current low.
+//   4. With UWB_ENABLED=1 (later upgrade, `pio run -e uwb`): also answer UWB ranging
+//      polls from the drone's anchors. Same board, add a DW3000 module.
 //
 // The DW3000 calls are isolated behind the `uwb_*` functions so the driver can be
 // swapped without touching the rest of the file.
@@ -12,16 +15,18 @@
 #include <Arduino.h>
 #include <BLEDevice.h>
 #include <BLEAdvertising.h>
-#include <esp_sleep.h>
-
+#if UWB_ENABLED
 #include "uwb_tag.h"
+#endif
 
 // ---------------------------------------------------------------------------
 // Pins (ESP32-C3 mini). Adjust to the carrier board.
 // ---------------------------------------------------------------------------
 static const int PIN_BUTTON = 9;    // active low, internal pull-up
-static const int PIN_LED = 8;
+static const int PIN_LED = 8;       // on-board status LED
 static const int PIN_VBAT = 0;      // ADC, through a 2:1 divider
+static const int PIN_BEACON = 1;    // gate of the N-MOSFET that switches the beacon LEDs
+                                    // (kept clear of the SPI pins the UWB module will use)
 static const int PIN_UWB_CS = 7;
 static const int PIN_UWB_RST = 10;
 static const int PIN_UWB_IRQ = 3;
@@ -35,6 +40,13 @@ enum ButtonState : uint8_t { BTN_NONE = 0, BTN_PAUSE = 1, BTN_LAND = 2 };
 
 #ifndef BAND_ID
 #define BAND_ID 1
+#endif
+#ifndef UWB_ENABLED
+#define UWB_ENABLED 0
+#endif
+// Must match BEACON_BLINK_HZ in firmware/drone-esp32cam/platformio.ini.
+#ifndef BLINK_HZ
+#define BLINK_HZ 2.5f
 #endif
 
 static BLEAdvertising *g_adv = nullptr;
@@ -131,17 +143,40 @@ void setup() {
   pinMode(PIN_LED, OUTPUT);
   analogReadResolution(12);
 
+  pinMode(PIN_BEACON, OUTPUT);
+  digitalWrite(PIN_BEACON, LOW);
+
+#if UWB_ENABLED
   uwb_tag_init(PIN_UWB_CS, PIN_UWB_RST, PIN_UWB_IRQ, BAND_ID);
+#endif
   ble_setup();
   Serial.println("FOLLOW-BAND ready");
+}
+
+// ---------------------------------------------------------------------------
+// Beacon: square wave at BLINK_HZ derived from the microsecond clock, so the rate
+// stays exact no matter how long other work in loop() takes.
+// ---------------------------------------------------------------------------
+static void update_beacon() {
+  static int last = -1;
+  const uint32_t period_us = static_cast<uint32_t>(1e6f / BLINK_HZ);
+  const int on = (micros() % period_us) < period_us / 2 ? 1 : 0;
+  if (on != last) {
+    digitalWrite(PIN_BEACON, on ? HIGH : LOW);
+    last = on;
+  }
 }
 
 void loop() {
   static uint32_t last_adv = 0;
   static uint32_t land_asserted_at = 0;
 
+  update_beacon();
+
+#if UWB_ENABLED
   // UWB: block briefly for a poll, respond if one arrived. Returns quickly otherwise.
   uwb_tag_service();
+#endif
 
   poll_button();
   if (g_button_state == BTN_LAND && land_asserted_at == 0) {
@@ -158,8 +193,8 @@ void loop() {
     digitalWrite(PIN_LED, g_paused ? HIGH : LOW);
   }
 
-  // Short light sleep between UWB polls. The anchor polls at 20 Hz, so ~10 ms of
-  // sleep keeps us responsive while cutting average current roughly in half.
-  esp_sleep_enable_timer_wakeup(10 * 1000);
-  esp_light_sleep_start();
+  // Short pause. The beacon edge is at most 2 ms late, which is about 1 % of a
+  // 200 ms half-period at 2.5 Hz and invisible to the camera. Light sleep is avoided
+  // because it can delay edges and upset BLE; the LEDs dominate power use anyway.
+  delay(2);
 }

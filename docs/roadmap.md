@@ -6,6 +6,8 @@
 - [x] OpenSCAD frame with prop guards, LED wristband cuff
 - [x] ESP32-CAM firmware: blob tracker, height hold, follow state machine, MSP output
 - [x] Follow logic unit-tested in Python and mirrored in C++
+- [x] Coded blinking beacon: multi-blob finder and blink filter (ignores traffic lights,
+      screens, glints), green or infrared LEDs, ESP32-C3 wristband ready for UWB
 - [ ] Print and assemble; weigh the frame (target under 12 g)
 - [ ] Bench: button arms/disarms, sticks move in Betaflight's Receiver tab
 - [ ] Height-hold flight, tune hover throttle and PD gains
@@ -13,7 +15,15 @@
 - [ ] Measure flight time per pack, set the flight timer
 - [ ] Record a demo video
 
-## Phase 1b: full build (UWB + ArduPilot)
+## Phase 1b: UWB on the budget drone (planned next)
+
+- [ ] Two DW3000 modules: bench ranging between the wristband and one anchor
+- [ ] Wristband UWB build (`pio run -e uwb`) on the same ESP32-C3 board
+- [ ] Two anchors on the drone's front arms; port `follow/estimator.py` bearing logic
+      to the ESP32 and feed it to the existing follow state machine
+- [ ] Keep the blinking beacon as a fallback when UWB drops out
+
+## Phase 1c: full build (UWB + ArduPilot)
 
 - [x] Design docs, BOM
 - [x] Follow controller (estimator, controller, safety) with simulator and tests

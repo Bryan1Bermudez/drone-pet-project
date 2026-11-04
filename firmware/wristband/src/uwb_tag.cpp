@@ -1,5 +1,8 @@
 #include "uwb_tag.h"
 
+// Only built for the UWB upgrade (`pio run -e uwb`); the LED-beacon build skips it.
+#if defined(UWB_ENABLED) && UWB_ENABLED
+
 #include <Arduino.h>
 #include <SPI.h>
 
@@ -123,3 +126,5 @@ void uwb_tag_service() {
 }
 
 uint32_t uwb_tag_responses() { return g_responses; }
+
+#endif  // UWB_ENABLED
