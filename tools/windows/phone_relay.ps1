@@ -54,9 +54,12 @@ function Find-DroneSsidOnPhone {
         PhoneShell "cmd wifi start-scan" | Out-Null
         Start-Sleep -Seconds 3
         foreach ($line in ((PhoneShell "cmd wifi list-scan-results") -split "`n")) {
-            # columns: BSSID Frequency RSSI Age(sec) SSID Flags ; SSID is the first field matching the drone
-            foreach ($tok in ($line -split '\s+')) {
-                if ($tok -match $DronePattern) { return $tok.Trim() }
+            # columns: BSSID  Frequency  RSSI  Age(sec)  SSID  Flags
+            # The SSID can contain spaces ("Contixo F19 Arvo-394B93"), so take everything
+            # between the age column and the first "[" of the flags.
+            if ($line -match '^\s*[0-9a-fA-F:]{17}\s+\d+\s+-?\d+\s+\S+\s+(.*?)\s+\[') {
+                $ssid = $Matches[1]
+                if ($ssid -match $DronePattern) { return $ssid }
             }
         }
         Write-Host "  ...phone is looking for the drone's Wi-Fi (is the drone on?)"
@@ -100,7 +103,7 @@ try {
     if (-not $drone) { throw "The phone cannot see the drone's Wi-Fi. Turn the drone off and on and try again." }
     Write-Host "  Drone network: $drone"
     if ((Get-PhoneWifiSsid) -ne $drone) {
-        Write-Host ("  " + (PhoneShell "cmd wifi connect-network $drone open").Trim())
+        Write-Host ("  " + (PhoneShell "cmd wifi connect-network '$drone' open").Trim())
         $deadline = (Get-Date).AddSeconds(25)
         while ((Get-Date) -lt $deadline -and (Get-PhoneWifiSsid) -ne $drone) { Start-Sleep -Seconds 1 }
     }
