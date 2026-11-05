@@ -66,8 +66,10 @@ stand-in light. Tests: `tools/tests/test_webcam_follow.py`.
 Video finding (5 Nov): the F19 sends video from udp/1234 to the port that talked to it on
 udp/8800 (matches Turbodrone's K417 notes). Through-the-phone NAT therefore carries
 controls but not video, and Windows Firewall drops it on direct Wi-Fi unless allowed;
-`start_drone.bat` now adds that rule. Working plan: PC Wi-Fi on the drone, phone on home
-Wi-Fi with USB tethering for internet.
+`start_drone.bat` now adds that rule. Fix (checked with a simulated NAT): send an empty packet
+to udp/1234 before START so the return path opens. Working plan, the user's choice: the
+PHONE joins the drone, the PC stays on home Wi-Fi (`start_drone.bat` = phone relay). Never
+make the phone forget the drone network (its screen is broken; joining is done over adb).
 
 ## The drone: what to get (original shortlist)
 

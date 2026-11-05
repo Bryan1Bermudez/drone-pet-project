@@ -1,3 +1,6 @@
+# PC-Wi-Fi mode (NOT the default): the PC's own Wi-Fi joins the drone.
+# The default is start_drone.bat = phone_relay.ps1 (phone joins the drone, PC stays on home Wi-Fi).
+#
 # Fly the Contixo F19 from the PC with Turbodrone.
 #
 # With TWO Wi-Fi adapters (e.g. a USB Wi-Fi stick): home Wi-Fi is never touched.
@@ -145,7 +148,6 @@ function Test-Phone {
 
 function Enable-PhoneTether {
     # Returns the tether adapter, or $null if it could not be turned on.
-    Release-PhoneFromDrone
     $t = Get-TetherAdapter
     if ($t) { Write-Host "Phone USB tethering is on ($($t.Name)): you stay online while flying." -ForegroundColor Green; return $t }
     if (-not (Test-Phone)) {
@@ -190,23 +192,6 @@ function Add-VideoFirewallRule([string]$droneNet) {
     $cmd = "New-NetFirewallRule -DisplayName '$name' -Direction Inbound -Protocol UDP -RemoteAddress $droneNet/24 -Action Allow -Profile Any | Out-Null"
     try { Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $cmd" }
     catch { Write-Host "Skipped. Without it there will be no video. Admin PowerShell: $cmd" -ForegroundColor Yellow }
-}
-
-function Release-PhoneFromDrone {
-    # If the phone is (or auto-joins) the drone's network, forget it there so the phone goes
-    # back to home Wi-Fi and the drone talks to the PC. The drone serves one client at a time.
-    if (-not (Test-Phone)) { return }
-    $status = (adb shell cmd wifi status 2>$null | Out-String)
-    foreach ($line in ((adb shell cmd wifi list-networks 2>$null | Out-String) -split "`n")) {
-        if ($line -match '^\s*(\d+)\s+(.*?)\s{2,}') {
-            $id = $Matches[1]; $name = $Matches[2]
-            if ($name -match $DronePattern) {
-                adb shell cmd wifi forget-network $id 2>$null | Out-Null
-                Write-Host "Phone: forgot '$name' so it goes back to home Wi-Fi."
-            }
-        }
-    }
-    if ($status -match 'connected to "([^"]+)"' -and $Matches[1] -match $DronePattern) { Start-Sleep -Seconds 5 }
 }
 
 # ---------------------------------------------------------------- main

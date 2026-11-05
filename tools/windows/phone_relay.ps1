@@ -1,6 +1,7 @@
-# CONTROL ONLY: the drone sends video from udp/1234 to whatever port talked to it on
-# udp/8800; Android's tethering NAT drops that, so no video arrives this way. For video
-# use start_drone.bat (PC Wi-Fi on the drone, phone tethering for internet).
+# The drone sends video FROM udp/1234 to the port that talked to it on udp/8800. The
+# patched Turbodrone first sends an empty packet to udp/1234 so the phone's tethering NAT
+# lets the video back in (checked with a simulated NAT). The phone keeps the drone's
+# network saved; nothing here makes it forget it.
 #
 # Fly the drone THROUGH THE PHONE: the phone joins the drone's Wi-Fi, the PC stays on
 # home Wi-Fi and reaches the drone over the USB cable (USB tethering).
@@ -108,6 +109,8 @@ Write-Host "=== Drone through the phone (PC stays on home Wi-Fi) ===" -Foregroun
 Write-Host "PROPS OFF for the first tests. Drone on a flat floor, switched on, room lights on."
 Read-Host "Press Enter when ready"
 
+$homeSsid = $null
+foreach ($line in (netsh wlan show interfaces)) { if (-not $homeSsid -and $line -match '^\s*SSID\s*:\s*(.+)$') { $homeSsid = $Matches[1].Trim() } }
 $dataWasOn = $false
 $portalChanged = $false
 $portalWas = ""
@@ -184,13 +187,33 @@ try {
     }
 
     Step "5. Routing the drone through the phone (approve the admin prompt)"
+    $gp = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy"
     $cmd = $fixIp + "Set-NetIPInterface -InterfaceIndex $($t.ifIndex) -AddressFamily IPv4 -InterfaceMetric 5000; " +
-           "route delete $droneNet 2>`$null | Out-Null; route add $droneNet mask 255.255.255.0 $phoneIp metric 1 if $($t.ifIndex)"
+           # internet must not go through the phone (the drone has none)
+           "route delete 0.0.0.0 mask 0.0.0.0 $phoneIp 2>`$null | Out-Null; " +
+           "route delete $droneNet 2>`$null | Out-Null; route add $droneNet mask 255.255.255.0 $phoneIp metric 1 if $($t.ifIndex); " +
+           # stop Windows dropping Wi-Fi because a wired (USB) connection appeared
+           "New-Item -Path '$gp' -Force | Out-Null; " +
+           "Set-ItemProperty -Path '$gp' -Name fMinimizeConnections -Value 0 -Type DWord; " +
+           "Set-ItemProperty -Path '$gp' -Name fSoftDisconnectConnections -Value 0 -Type DWord; " +
+           # let the drone's video (from udp/1234) in
+           "if (-not (Get-NetFirewallRule -DisplayName 'Turbodrone drone video' -ErrorAction SilentlyContinue)) { " +
+           "New-NetFirewallRule -DisplayName 'Turbodrone drone video' -Direction Inbound -Protocol UDP -RemoteAddress $droneNet/24 -Action Allow -Profile Any | Out-Null }"
     try { Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $cmd" }
     catch { throw "The admin prompt was declined; the PC cannot reach the drone without the route." }
     $route = Get-NetRoute -DestinationPrefix "$droneNet/24" -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($route) { Write-Host "  Route added: $droneNet/24 via phone $phoneIp" -ForegroundColor Green }
     else { Write-Host "  Could not confirm the route; continuing." -ForegroundColor Yellow }
+    if ($homeSsid) {
+        $now = $null
+        foreach ($line in (netsh wlan show interfaces)) { if (-not $now -and $line -match '^\s*SSID\s*:\s*(.+)$') { $now = $Matches[1].Trim() } }
+        if ($now -ne $homeSsid) {
+            Write-Host "  PC Wi-Fi dropped; reconnecting to $homeSsid" -ForegroundColor Yellow
+            netsh wlan connect name="$homeSsid" | Out-Null
+            Start-Sleep -Seconds 5
+        }
+        Write-Host "  PC Wi-Fi: $homeSsid (internet stays on it)" -ForegroundColor Green
+    }
     $find = Find-NetRoute -RemoteIPAddress $droneIp -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($find) { Write-Host "  Windows sends drone traffic via: $($find.InterfaceAlias)" }
     if ($upstream -notmatch 'wlan') {
@@ -220,14 +243,5 @@ finally {
         Write-Host "Phone internet check restored."
     }
     if ($dataWasOn) { PhoneShell "svc data enable" | Out-Null; Write-Host "Phone mobile data back on." }
-    foreach ($line in ((PhoneShell "cmd wifi list-networks") -split "`n")) {
-        if ($line -match '^\s*(\d+)\s+(.*?)\s{2,}') {
-            $id = $Matches[1]; $name = $Matches[2]
-            if ($name -match $DronePattern) {
-                PhoneShell "cmd wifi forget-network $id" | Out-Null
-                Write-Host "Phone: forgot '$name' so it goes back to home Wi-Fi."
-            }
-        }
-    }
-    Write-Host "Done. Turn the drone off and the phone goes back to your home Wi-Fi by itself."
+    Write-Host "Done. The phone keeps the drone's network saved."
 }

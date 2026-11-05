@@ -35,19 +35,24 @@ filter, follow logic) on the webcam and shows what it would tell the drone.
 - A real blinking light: open `tools/strobe.html` full screen on any other screen.
 - **R** reset, **Q** quit. `--camera 1` picks another camera.
 
-## Flying through the phone (control only, no video)
+## Every flight: through the phone (default)
 
-Tested 5 Nov: controls reach the drone this way, but video cannot: the drone sends video
-from udp/1234 while we talk to udp/8800, and Android's tethering NAT drops replies from a
-different port. Use `start_drone.bat` with phone tethering for internet instead.
+`start_drone.bat`. The phone joins the drone's Wi-Fi; the PC stays on home Wi-Fi and
+reaches the drone over USB tethering. The PC's Wi-Fi never joins the drone, and nothing
+makes the phone forget the drone's network.
 
+1. Closes the WiFi UAV app; mobile data off (back on at the end); Android's internet
+   check off (restored at the end) so it shares the drone Wi-Fi over USB.
+2. Joins the phone to the drone (`adb shell cmd wifi connect-network`, open network).
+3. Checks USB tethering (opens Settings in scrcpy if needed).
+4. One admin prompt: route the drone's subnet through the phone, no internet through the
+   phone, stop Windows dropping Wi-Fi when the USB connection appears, firewall rule for
+   the drone's video. Reconnects home Wi-Fi if Windows dropped it anyway.
+5. Starts Turbodrone. The patched video code first sends an empty packet to udp/1234
+   (where the video comes from) so the phone's NAT lets the video back in.
 
-`start_drone_via_phone.bat`: the phone joins the drone's Wi-Fi and the PC reaches the
-drone over USB tethering, so the PC stays on home Wi-Fi the whole time. It closes the
-WiFi UAV app, turns the phone's mobile data off (back on at the end), joins the phone
-to the drone (`adb shell cmd wifi connect-network`), checks USB tethering (opens
-Settings in scrcpy if needed), then with one admin prompt routes the drone's subnet
-through the phone and keeps home Wi-Fi for internet, and starts Turbodrone.
+`start_drone_pc_wifi.bat` is the old mode where the PC's own Wi-Fi joins the drone. Not
+used by default.
 
 ## Video and Windows Firewall
 

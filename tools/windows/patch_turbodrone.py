@@ -16,6 +16,9 @@ What it changes (each edit is marked "drone-pet-project patch"):
 * backend: throttle (climb/descend) also scaled, 60% with the shipped .env, so it
   does not rev the motors to full on every climb (WIFI_UAV_THROTTLE_SPEED_INDEX;
   unset = original behaviour, the shipped .env sets 1).
+* backend: before asking for video, send an empty packet to udp/1234 (where the
+  drone's video comes from) so a phone's tethering NAT or Windows Firewall lets
+  the video back in (WIFI_UAV_PUNCH_PORTS).
 * frontend: speed selector starts on "Medium"; key C = gyro calibration (on the
   ground only), Space = emergency motor stop.
 
@@ -127,6 +130,17 @@ EDITS: list[tuple] = [
         "                self._apply_speed_scale(drone_model.throttle, 2),\n",
         "                self._apply_speed_scale(drone_model.throttle, int(os.getenv(\"WIFI_UAV_THROTTLE_SPEED_INDEX\", \"2\"))),  # drone-pet-project patch\n",
         2,
+    ),
+    (
+        # Video return path: the drone sends video FROM udp/1234 to the port that sent
+        # START to udp/8800. A NAT (phone USB tethering) or Windows Firewall only lets in
+        # replies from ports we have sent to, so first send an empty packet to udp/1234
+        # from the same socket. Ports from WIFI_UAV_PUNCH_PORTS (default 1234, empty = off).
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "    def send_start_command(self) -> None:\n",
+        "    def send_start_command(self) -> None:\n"
+        "        for port in [int(p) for p in os.getenv(\"WIFI_UAV_PUNCH_PORTS\", \"1234\").split(\",\") if p.strip()]:\n"
+        "            self._safe_sendto(b\"\", port, \"PUNCH\")  # drone-pet-project patch: open video return path\n",
     ),
     (
         # Watchdog: the page sends sticks 30 times a second. If it stops (window
