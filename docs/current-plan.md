@@ -55,6 +55,11 @@ tethering is out (broken screen) and Ethernet is not allowed in the apartment.
 supports two adapters) so the PC keeps internet while its Wi-Fi stays on the drone, and add a
 one-click Windows launcher that joins the drone network and starts Turbodrone.
 
+Webcam test mode (no drone, stays online): `tools/webcam_follow.py`
+(`tools/windows/webcam_test.bat`), with a fake blinking beacon on the mouse, a virtual
+drone view that turns and zooms with the commands, and `tools/strobe.html` as a
+stand-in light. Tests: `tools/tests/test_webcam_follow.py`.
+
 ## The drone: what to get (original shortlist)
 
 First choice is a laptop-controlled camera drone, so nothing needs building or printing:

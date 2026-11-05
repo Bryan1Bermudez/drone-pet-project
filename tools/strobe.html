@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon Strobe</title>
+<style>
+  :root { --on: #00ff00; --off: #000000; --text: #9a9a9a; }
+  html, body { margin: 0; height: 100%; background: var(--off); color: var(--text);
+               font: 16px system-ui, sans-serif; overflow: hidden; }
+  #light { position: fixed; inset: 0; background: var(--off); }
+  #panel { position: fixed; left: 16px; right: 16px; bottom: 16px; text-align: center; }
+  button { font: inherit; margin: 4px; padding: 8px 14px; border-radius: 8px;
+           border: 1px solid #555; background: #111; color: #ddd; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div id="light"></div>
+<div id="panel">
+  <div>Stand-in for the wristband: blinks at <span id="hz">2.5</span> Hz, 50 % on.
+       Tap the light to hide these controls.</div>
+  <button data-color="#00ff00">Green</button>
+  <button data-color="#ff0000">Red</button>
+  <button data-color="#0000ff">Blue</button>
+  <button id="full">Full screen</button>
+</div>
+<script>
+  // Same pattern as the wristband firmware: square wave, BLINK_HZ, 50 % duty.
+  const params = new URLSearchParams(location.search);
+  const hz = parseFloat(params.get("hz")) || 2.5;
+  document.getElementById("hz").textContent = hz;
+  const light = document.getElementById("light");
+  const panel = document.getElementById("panel");
+  let color = "#00ff00";
+  function frame(now) {
+    const on = ((now / 1000) * hz) % 1 < 0.5;
+    light.style.background = on ? color : "#000000";
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  document.querySelectorAll("button[data-color]").forEach(b =>
+    b.addEventListener("click", () => { color = b.dataset.color; }));
+  document.getElementById("full").addEventListener("click", () =>
+    document.documentElement.requestFullscreen && document.documentElement.requestFullscreen());
+  light.addEventListener("click", () => panel.classList.toggle("hidden"));
+</script>
+</body>
+</html>

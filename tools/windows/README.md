@@ -21,6 +21,20 @@ Run `install.bat`. It:
 
 Re-running it is safe. Originals are kept as `*.orig`.
 
+## Testing without the drone (stays on home Wi-Fi)
+
+Double-click `webcam_test.bat`. It runs the real follow code (blob finder, blink
+filter, follow logic) on the webcam and shows what it would tell the drone.
+
+- **F**: a fake green beacon, blinking at the wristband rate, follows the mouse;
+  mouse wheel or +/- changes its size (distance).
+- **S**: virtual drone on/off. The view turns and moves forward/back with the
+  commands, so you can watch it centre the beacon and hold the distance.
+- Steady green things (a lamp, a shirt) show as grey candidates and must never
+  get the green BEACON circle.
+- A real blinking light: open `tools/strobe.html` full screen on any other screen.
+- **R** reset, **Q** quit. `--camera 1` picks another camera.
+
 ## Every flight
 
 Double-click `start_drone.bat`. It joins the drone's `Contixo-F19-xxxx` network, reads
