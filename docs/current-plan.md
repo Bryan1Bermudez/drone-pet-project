@@ -36,6 +36,13 @@ First test (props off): connect the laptop to the drone's Wi-Fi, run Turbodrone 
 `npm run dev` in `frontend`, open http://localhost:5173. Note Turbodrone's "Land" button
 cuts the motors immediately (acts as an E-stop).
 
+First test results (5 Nov): Turbodrone reached the drone but no video arrived on port
+8800 (`No initial video packets`), control at 100% speed was too twitchy and it drifted
+into things (dim room at night; gyro not calibrated). Fixes in `tools/windows/`:
+patch for Low speed, gentle sticks, C = calibrate, Space = stop, video probed on 8800
+and 8801, launcher that switches Wi-Fi and finds the drone's address automatically.
+Obstacle avoidance has no known control bit yet; noise is the hardware.
+
 PC networking: one Wi-Fi card cannot join the drone and home Wi-Fi at once (a VM does
 not help; it shares the same card). For now the PC swaps networks for each test.
 **To do later:** set up phone USB tethering, an Ethernet cable, or a ~10 to 15 USD USB
