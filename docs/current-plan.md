@@ -36,6 +36,12 @@ First test (props off): connect the laptop to the drone's Wi-Fi, run Turbodrone 
 `npm run dev` in `frontend`, open http://localhost:5173. Note Turbodrone's "Land" button
 cuts the motors immediately (acts as an E-stop).
 
+PC networking: one Wi-Fi card cannot join the drone and home Wi-Fi at once (a VM does
+not help; it shares the same card). For now the PC swaps networks for each test.
+**To do later:** set up phone USB tethering, an Ethernet cable, or a ~10 to 15 USD USB
+Wi-Fi adapter so the PC keeps internet while its Wi-Fi stays on the drone, and add a
+one-click Windows launcher that joins the drone network and starts Turbodrone.
+
 ## The drone: what to get (original shortlist)
 
 First choice is a laptop-controlled camera drone, so nothing needs building or printing:
