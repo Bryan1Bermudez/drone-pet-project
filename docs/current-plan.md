@@ -48,8 +48,11 @@ biggest software noise saving once following works.
 
 PC networking: one Wi-Fi card cannot join the drone and home Wi-Fi at once (a VM does
 not help; it shares the same card). For now the PC swaps networks for each test.
-**To do later:** set up phone USB tethering, an Ethernet cable, or a ~10 to 15 USD USB
-Wi-Fi adapter so the PC keeps internet while its Wi-Fi stays on the drone, and add a
+Checked 5 Nov: the PC's card is a MediaTek MT7922 (RZ616); `tools/windows/check_dual_sta.py`
+reports no Windows 11 Dual STA support, so it cannot hold two Wi-Fi connections. Phone
+tethering is out (broken screen) and Ethernet is not allowed in the apartment.
+**To do:** buy a ~10 to 20 USD dual-band USB Wi-Fi adapter (`start_drone.bat` already
+supports two adapters) so the PC keeps internet while its Wi-Fi stays on the drone, and add a
 one-click Windows launcher that joins the drone network and starts Turbodrone.
 
 ## The drone: what to get (original shortlist)
