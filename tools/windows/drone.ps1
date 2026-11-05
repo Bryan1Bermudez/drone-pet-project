@@ -119,7 +119,7 @@ function Set-DroneAdapterLowPriority([string]$alias) {
     # only asks for admin the first time.
     $ipif = Get-NetIPInterface -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue
     if (-not $ipif -or $ipif.InterfaceMetric -ge 1000) { return }
-    Write-Host "One-time setup: telling Windows to keep home Wi-Fi for internet (approve the admin prompt)..." -ForegroundColor Yellow
+    Write-Host "One-time setup: telling Windows to use your other connection for internet (approve the admin prompt)..." -ForegroundColor Yellow
     $cmd = "Set-NetIPInterface -InterfaceAlias '$alias' -AddressFamily IPv4 -InterfaceMetric 5000"
     try {
         Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $cmd"
@@ -128,6 +128,54 @@ function Set-DroneAdapterLowPriority([string]$alias) {
         Write-Host "Skipped. If websites stop loading while flying, run this once in an admin PowerShell:" -ForegroundColor Yellow
         Write-Host "  $cmd"
     }
+}
+
+function Get-TetherAdapter {
+    # Phone USB tethering shows up as a wired "Remote NDIS" adapter.
+    Get-NetAdapter -ErrorAction SilentlyContinue |
+        Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -match 'Remote NDIS|RNDIS|Android|USB Ethernet|UsbNcm' } |
+        Select-Object -First 1
+}
+
+function Test-Phone {
+    if (-not (Get-Command adb -ErrorAction SilentlyContinue)) { return $false }
+    $state = (adb get-state 2>$null | Out-String).Trim()
+    return ($state -eq 'device')
+}
+
+function Enable-PhoneTether {
+    # Returns the tether adapter, or $null if it could not be turned on.
+    $t = Get-TetherAdapter
+    if ($t) { Write-Host "Phone USB tethering is on ($($t.Name)): you stay online while flying." -ForegroundColor Green; return $t }
+    if (-not (Test-Phone)) {
+        Write-Host "Phone not found over USB (plug it in; 'adb devices' must say 'device'). You will be offline while flying." -ForegroundColor Yellow
+        return $null
+    }
+    Write-Host "Opening the phone's tethering settings in a scrcpy window..."
+    # "am start" exits 0 even when the screen does not exist, so check its output.
+    $res = (adb shell am start -n com.android.settings/.TetherSettings 2>&1 | Out-String)
+    if ($res -match 'Error|does not exist') {
+        $res = (adb shell am start -n 'com.android.settings/.Settings$TetherSettingsActivity' 2>&1 | Out-String)
+    }
+    if ($res -match 'Error|does not exist') { Write-Host "Could not open tethering settings directly; open Settings > Network & internet > Hotspot & tethering in scrcpy." }
+    if (Get-Command scrcpy -ErrorAction SilentlyContinue) { Start-Process scrcpy -WindowStyle Minimized | Out-Null; Start-Sleep -Seconds 2 }
+    Write-Host "In the scrcpy window, switch ON 'USB tethering'. Waiting up to 90 s..." -ForegroundColor Yellow
+    $deadline = (Get-Date).AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+        $t = Get-TetherAdapter
+        if ($t) { Write-Host "USB tethering is on ($($t.Name))." -ForegroundColor Green; return $t }
+        Start-Sleep -Seconds 2
+    }
+    Write-Host "USB tethering did not come on. Continuing; you will be offline while flying." -ForegroundColor Yellow
+    return $null
+}
+
+function Test-Internet {
+    try {
+        $r = Invoke-WebRequest -Uri "http://www.msftconnecttest.com/connecttest.txt" -UseBasicParsing -TimeoutSec 6
+        return ($r.Content -match 'Microsoft Connect Test')
+    }
+    catch { return $false }
 }
 
 # ---------------------------------------------------------------- main
@@ -182,6 +230,9 @@ Write-Host "  - Bright room, patterned floor (the hover sensor needs to see the 
 Write-Host "  - Optional: obstacle avoidance ON with the remote's avoidance button"
 Read-Host "Press Enter when ready"
 
+$tether = $null
+if (-not $dual) { $tether = Enable-PhoneTether }
+
 $drone = Find-DroneNetwork $droneAdapter
 if (-not $drone) {
     Write-Host "Could not see the drone's Wi-Fi. Turn the drone off and on, then run this again." -ForegroundColor Red
@@ -216,6 +267,17 @@ try {
     Write-Host "Connected." -ForegroundColor Green
 
     if ($dual) { Set-DroneAdapterLowPriority $droneAdapter }
+    if ($dual -or $tether) {
+        Start-Sleep -Seconds 3
+        if (Test-Internet) { Write-Host "Internet still works." -ForegroundColor Green }
+        else {
+            # Windows is trying to reach the internet through the drone. Fix once (admin), then recheck.
+            Set-DroneAdapterLowPriority $droneAdapter
+            Start-Sleep -Seconds 3
+            if (Test-Internet) { Write-Host "Internet works again." -ForegroundColor Green }
+            else { Write-Host "No internet right now; the drone test still works." -ForegroundColor Yellow }
+        }
+    }
 
     $gw = Get-DroneGateway $droneAdapter
     if (-not $gw) {

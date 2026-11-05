@@ -74,6 +74,15 @@ New-Item -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy -For
 Set-ItemProperty -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy -Name fMinimizeConnections -Value 0 -Type DWord
 ```
 
+Phone tethering is built into `start_drone.bat`: with one Wi-Fi adapter it checks for
+the phone's USB tethering adapter, and if it is off (phone plugged in, adb authorised)
+it opens the phone's tethering settings in scrcpy and waits for you to switch it on.
+After joining the drone it checks the internet still works and, if Windows tries to
+use the drone for internet, fixes the route once (admin prompt).
+
+`install_wifi_uav_app.bat` opens the WiFi UAV app (com.lcfld.fldpublic) in the phone's
+Play Store inside scrcpy so you can tap Install.
+
 ## Settings (`turbodrone\backend\.env`)
 
 | Setting | Meaning |
