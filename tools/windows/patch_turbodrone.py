@@ -13,6 +13,9 @@ What it changes (each edit is marked "drone-pet-project patch"):
 * backend: video ports and control-packet axis order can be set from .env
   (WIFI_UAV_VIDEO_PORTS, WIFI_UAV_AXIS_ORDER), so video can be probed on
   8800 and 8801 without changing how the sticks are sent.
+* backend: throttle (climb/descend) also scaled, 60% with the shipped .env, so it
+  does not rev the motors to full on every climb (WIFI_UAV_THROTTLE_SPEED_INDEX;
+  unset = original behaviour, the shipped .env sets 1).
 * frontend: speed selector starts on "Low"; key C = gyro calibration (on the
   ground only), Space = emergency motor stop.
 
@@ -28,8 +31,10 @@ from pathlib import Path
 
 MARK = "drone-pet-project patch"
 
-# (relative path, old text, new text). Old text must appear exactly once.
-EDITS: list[tuple[str, str, str]] = [
+# (relative path, old text, new text[, expected count]). Each edit is applied
+# unless its new text is already present, so re-running after an update only
+# adds the new edits.
+EDITS: list[tuple] = [
     (
         "backend/web_server.py",
         "        model = WifiUavRcModel()\n",
@@ -107,6 +112,13 @@ EDITS: list[tuple[str, str, str]] = [
         "\n"
         "  /* --------------- camera tilt keyboard hold ---------------- */\n",
     ),
+    (
+        # Quieter climbs: throttle normally ignores the speed tier (always 100%).
+        "backend/protocols/wifi_uav_rc_protocol_adapter.py",
+        "                self._apply_speed_scale(drone_model.throttle, 2),\n",
+        "                self._apply_speed_scale(drone_model.throttle, int(os.getenv(\"WIFI_UAV_THROTTLE_SPEED_INDEX\", \"2\"))),  # drone-pet-project patch\n",
+        2,
+    ),
 ]
 
 
@@ -119,9 +131,11 @@ def main() -> int:
         print(f"ERROR: {root} does not look like a Turbodrone folder (no backend/web_server.py)")
         return 2
 
-    by_file: dict[str, list[tuple[str, str]]] = {}
-    for rel, old, new in EDITS:
-        by_file.setdefault(rel, []).append((old, new))
+    by_file: dict[str, list[tuple[str, str, int]]] = {}
+    for edit in EDITS:
+        rel, old, new = edit[:3]
+        expected = edit[3] if len(edit) > 3 else 1
+        by_file.setdefault(rel, []).append((old, new, expected))
 
     failed = False
     for rel, edits in by_file.items():
@@ -130,18 +144,22 @@ def main() -> int:
         # Read with newline translation, match on "\n", write back the same style.
         crlf = b"\r\n" in path.read_bytes()
         text = path.read_text(encoding="utf-8")
-        if MARK in text:
-            print(f"already patched: {rel}")
-            continue
-        for old, new in edits:
+        applied = 0
+        for old, new, expected in edits:
+            if new in text:
+                continue  # this edit is already in place
             count = text.count(old)
-            if count != 1:
-                print(f"ERROR: {rel}: expected the original text once, found {count} times. "
+            if count != expected:
+                print(f"ERROR: {rel}: expected the original text {expected} time(s), found {count}. "
                       "Turbodrone may have changed; ask Claude to update the patch.")
                 failed = True
                 break
-            text = text.replace(old, new, 1)
+            text = text.replace(old, new)
+            applied += 1
         else:
+            if applied == 0:
+                print(f"already patched: {rel}")
+                continue
             backup = path.with_name(path.name + ".orig")
             if not backup.exists():
                 shutil.copy2(path, backup)

@@ -41,7 +41,10 @@ First test results (5 Nov): Turbodrone reached the drone but no video arrived on
 into things (dim room at night; gyro not calibrated). Fixes in `tools/windows/`:
 patch for Low speed, gentle sticks, C = calibrate, Space = stop, video probed on 8800
 and 8801, launcher that switches Wi-Fi and finds the drone's address automatically.
-Obstacle avoidance has no known control bit yet; noise is the hardware.
+Obstacle avoidance is toggled only by the F19's 2.4 GHz remote (the WiFi UAV app has
+no avoidance command); test whether it stays on under PC control. Noise: software now
+also caps throttle at 60%; hover noise is the props. Land-and-wait mode (task 4) is the
+biggest software noise saving once following works.
 
 PC networking: one Wi-Fi card cannot join the drone and home Wi-Fi at once (a VM does
 not help; it shares the same card). For now the PC swaps networks for each test.

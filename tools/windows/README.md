@@ -35,13 +35,26 @@ connect: click it in the Wi-Fi list and tick "Connect automatically" again.
 | Setting | Meaning |
 |---|---|
 | `WIFI_UAV_SPEED_INDEX` | 0 Low (30%), 1 Med (60%), 2 High (100%) |
+| `WIFI_UAV_THROTTLE_SPEED_INDEX` | climb/descend strength, same scale; 1 (60%) avoids full-power revving |
 | `WIFI_UAV_PROFILE` | `precise`, `normal`, `aggressive` |
 | `WIFI_UAV_AXIS_ORDER` | `fld` (default) or `uav` if turn and sideways are swapped |
 | `WIFI_UAV_VIDEO_PORTS` | ports to request video on |
 | `DRONE_TYPE` | `wifi_uav` (or `wifi_uav_uav` to try the other packet family) |
 
-## Not fixable in software
+## Obstacle avoidance on the F19
 
-- Obstacle avoidance: Turbodrone's control packet has no bit for it. Finding it needs a
-  packet capture of the WiFi UAV phone app while toggling avoidance.
-- Noise: small fast props. The quiet build is the later 3 to 3.5 inch drone.
+From the F19 manual: avoidance is switched on and off with the **Obstacle Avoidance
+button on the 2.4 GHz remote**. It covers four sides; when something is detected the
+drone stops in place and the remote beeps. While it is on, speed is reduced and the
+fast gear is locked out. Contixo recommends a room of at least 6 x 6 m.
+
+The sensing and the stopping happen on the drone. The WiFi UAV phone app has no
+avoidance command at all (Turbodrone's decompiled-app notes list every command bit:
+takeoff/land, stop, gyro, flip, camera tilt, headless, high/low, tracking), so the PC
+cannot switch it on over Wi-Fi. The open question is whether the mode stays active
+when the PC takes over after the remote turned it on. Test it before relying on it.
+
+## Noise
+
+Software can only stop the motors from revving: Low speed, gentle sticks and 60%
+throttle are set in `.env`. Hover noise itself is the props.
