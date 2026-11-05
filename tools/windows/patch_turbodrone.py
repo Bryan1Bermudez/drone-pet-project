@@ -6,8 +6,8 @@ Run with Turbodrone's own Python, from anywhere:
 
 What it changes (each edit is marked "drone-pet-project patch"):
 
-* backend: start at the lowest speed tier and the gentle "precise" stick
-  profile (both overridable in backend/.env).
+* backend: starting speed tier and stick profile come from backend/.env
+  (the shipped .env uses Medium and "normal").
 * backend: new "calibrate" command that holds the gyro-calibration flag for
   half a second.
 * backend: video ports and control-packet axis order can be set from .env
@@ -16,7 +16,7 @@ What it changes (each edit is marked "drone-pet-project patch"):
 * backend: throttle (climb/descend) also scaled, 60% with the shipped .env, so it
   does not rev the motors to full on every climb (WIFI_UAV_THROTTLE_SPEED_INDEX;
   unset = original behaviour, the shipped .env sets 1).
-* frontend: speed selector starts on "Low"; key C = gyro calibration (on the
+* frontend: speed selector starts on "Medium"; key C = gyro calibration (on the
   ground only), Space = emergency motor stop.
 
 Safe to run more than once. Originals are kept as *.orig next to each file.
@@ -31,7 +31,8 @@ from pathlib import Path
 
 MARK = "drone-pet-project patch"
 
-# (relative path, old text, new text[, expected count]). Each edit is applied
+# (relative path, old text, new text[, expected count[, skip if this text is present]]).
+# Each edit is applied
 # unless its new text is already present, so re-running after an update only
 # adds the new edits.
 EDITS: list[tuple] = [
@@ -89,6 +90,8 @@ EDITS: list[tuple] = [
         "frontend/src/hooks/useControls.ts",
         "  const [speedTier, setSpeedTierSt] = useState<SpeedTier>(2);\n",
         "  const [speedTier, setSpeedTierSt] = useState<SpeedTier>(0); // drone-pet-project patch: start slow\n",
+        1,
+        "drone-pet-project patch: start at Medium",  # superseded by the Medium edit below
     ),
     (
         "frontend/src/hooks/useControls.ts",
@@ -111,6 +114,12 @@ EDITS: list[tuple] = [
         "  }, []);\n"
         "\n"
         "  /* --------------- camera tilt keyboard hold ---------------- */\n",
+    ),
+    (
+        # Start the speed selector on Medium: Low was too weak on the F19.
+        "frontend/src/hooks/useControls.ts",
+        "  const [speedTier, setSpeedTierSt] = useState<SpeedTier>(0); // drone-pet-project patch: start slow\n",
+        "  const [speedTier, setSpeedTierSt] = useState<SpeedTier>(1); // drone-pet-project patch: start at Medium\n",
     ),
     (
         # Quieter climbs: throttle normally ignores the speed tier (always 100%).
@@ -173,11 +182,12 @@ def main() -> int:
         print(f"ERROR: {root} does not look like a Turbodrone folder (no backend/web_server.py)")
         return 2
 
-    by_file: dict[str, list[tuple[str, str, int]]] = {}
+    by_file: dict[str, list[tuple[str, str, int, str | None]]] = {}
     for edit in EDITS:
         rel, old, new = edit[:3]
         expected = edit[3] if len(edit) > 3 else 1
-        by_file.setdefault(rel, []).append((old, new, expected))
+        skip_if = edit[4] if len(edit) > 4 else None
+        by_file.setdefault(rel, []).append((old, new, expected, skip_if))
 
     failed = False
     for rel, edits in by_file.items():
@@ -187,9 +197,9 @@ def main() -> int:
         crlf = b"\r\n" in path.read_bytes()
         text = path.read_text(encoding="utf-8")
         applied = 0
-        for old, new, expected in edits:
-            if new in text:
-                continue  # this edit is already in place
+        for old, new, expected, skip_if in edits:
+            if new in text or (skip_if and skip_if in text):
+                continue  # already in place, or replaced by a later edit
             count = text.count(old)
             if count != expected:
                 print(f"ERROR: {rel}: expected the original text {expected} time(s), found {count}. "
