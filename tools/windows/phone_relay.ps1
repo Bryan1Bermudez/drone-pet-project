@@ -105,6 +105,8 @@ Write-Host "PROPS OFF for the first tests. Drone on a flat floor, switched on, r
 Read-Host "Press Enter when ready"
 
 $dataWasOn = $false
+$portalChanged = $false
+$portalWas = ""
 $backend = $null
 $frontend = $null
 try {
@@ -116,9 +118,19 @@ try {
     PhoneShell "svc data disable" | Out-Null
 
     Step "3. Joining the phone to the drone's Wi-Fi"
+    # Android only shares (tethers) a network it has checked has internet. The drone has
+    # none, so switch the check off while flying (restored at the end).
+    $portalWas = (PhoneShell "settings get global captive_portal_mode").Trim()
+    PhoneShell "settings put global captive_portal_mode 0" | Out-Null
+    $portalChanged = $true
     $drone = Find-DroneSsidOnPhone
     if (-not $drone) { throw "The phone cannot see the drone's Wi-Fi. Turn the drone off and on and try again." }
     Write-Host "  Drone network: $drone"
+    if ((Get-PhoneWifiSsid) -eq $drone) {
+        # Already on it from before the check was switched off: rejoin so Android re-evaluates.
+        PhoneShell "svc wifi disable" | Out-Null; Start-Sleep -Seconds 2
+        PhoneShell "svc wifi enable" | Out-Null; Start-Sleep -Seconds 3
+    }
     if ((Get-PhoneWifiSsid) -ne $drone) {
         Write-Host ("  " + (PhoneShell "cmd wifi connect-network '$drone' open").Trim())
         $deadline = (Get-Date).AddSeconds(25)
@@ -150,6 +162,8 @@ try {
     while ((Get-Date) -lt $deadline -and -not $phoneIp) { $phoneIp = Get-PhoneTetherIp; if (-not $phoneIp) { Start-Sleep -Seconds 1 } }
     $pcIp = @(Get-NetIPAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.IPAddress }) | Where-Object { $_ } | Select-Object -First 1
     $upstream = Get-TetherUpstream
+    $deadline = (Get-Date).AddSeconds(25)
+    while ((Get-Date) -lt $deadline -and $upstream -notmatch 'wlan') { Start-Sleep -Seconds 2; $upstream = Get-TetherUpstream }
     Write-Host "  PC side: $($t.Name) ($($t.InterfaceDescription)) $pcIp"
     Write-Host "  Phone side: $phoneIp"
     Write-Host "  Phone shares: $upstream"
@@ -196,6 +210,11 @@ catch {
 }
 finally {
     foreach ($p in @($backend, $frontend)) { if ($p) { taskkill /PID $p.Id /T /F 2>$null | Out-Null } }
+    if ($portalChanged) {
+        if ($portalWas -match '^\d+$') { PhoneShell "settings put global captive_portal_mode $portalWas" | Out-Null }
+        else { PhoneShell "settings delete global captive_portal_mode" | Out-Null }
+        Write-Host "Phone internet check restored."
+    }
     if ($dataWasOn) { PhoneShell "svc data enable" | Out-Null; Write-Host "Phone mobile data back on." }
     Write-Host "Done. Turn the drone off and the phone goes back to your home Wi-Fi by itself."
 }
