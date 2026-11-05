@@ -12,9 +12,10 @@ E:\drone follower\
 
 Run `install.bat`. It:
 
-- patches Turbodrone (`patch_turbodrone.py`): starts on Low speed with gentle sticks,
-  adds C = gyro calibration and Space = emergency stop, lets `.env` choose video ports
-  and stick order;
+- patches Turbodrone (`patch_turbodrone.py`): starts on Low speed with gentle sticks
+  and 60% throttle, adds C = gyro calibration and Space = emergency stop, releases all
+  sticks when the browser window loses focus, centres the sticks if the page stops
+  sending for 0.5 s or disconnects, lets `.env` choose video ports and stick order;
 - copies `turbodrone.env` to `turbodrone\backend\.env` (video on ports 8800 and 8801);
 - runs `npm install` for the web page.
 
@@ -22,13 +23,39 @@ Re-running it is safe. Originals are kept as `*.orig`.
 
 ## Every flight
 
-Double-click `start_drone.bat`. It remembers your home Wi-Fi, stops Windows from
-switching back to it, joins the drone's `Contixo-F19-xxxx` network, reads the drone's
-address, starts Turbodrone and opens http://localhost:5173. Press Enter in its window
-to stop everything and reconnect home Wi-Fi.
+Double-click `start_drone.bat`. It joins the drone's `Contixo-F19-xxxx` network, reads
+the drone's address, starts Turbodrone and opens http://localhost:5173. Press Enter in
+its window to stop.
 
-If you close that window with the X instead, your home network stays on manual
-connect: click it in the Wi-Fi list and tick "Connect automatically" again.
+- **Two Wi-Fi adapters** (built-in + USB stick): home Wi-Fi is never touched. The spare
+  adapter flies the drone. The first time, it asks for admin once to tell Windows to
+  keep using home Wi-Fi for internet (interface metric 5000 on the drone adapter).
+- **One Wi-Fi adapter**: it has to leave home Wi-Fi. It stops Windows jumping back
+  mid-flight and reconnects home when you press Enter. If you close the window with
+  the X instead, tick "Connect automatically" on your home network again.
+
+## Staying online while flying
+
+One Wi-Fi card can only join one network; Windows has no setting to change that, and a
+virtual machine shares the same card. Ways around it, best first:
+
+1. **USB Wi-Fi adapter** (about 10 to 20 USD, e.g. TP-Link Archer T2U). Fully automatic
+   with `start_drone.bat`.
+2. **Ethernet cable** to the router (or powerline adapters if it is far). Internet goes
+   over the cable; the launcher uses the Wi-Fi for the drone.
+3. **Bluetooth tethering from a phone** (free, slower, fine for chat and browsing).
+   Phone: turn on Bluetooth tethering (Android) or Personal Hotspot (iPhone). PC: pair
+   the phone, then Control Panel > Devices and Printers > right-click the phone >
+   Connect using > Access point.
+4. **USB tethering from a phone** (free).
+
+If Windows keeps dropping the drone's Wi-Fi on the second adapter, allow simultaneous
+connections once from an admin PowerShell:
+
+```
+New-Item -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy -Force | Out-Null
+Set-ItemProperty -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\WcmSvc\GroupPolicy -Name fMinimizeConnections -Value 0 -Type DWord
+```
 
 ## Settings (`turbodrone\backend\.env`)
 

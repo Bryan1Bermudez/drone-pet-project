@@ -119,6 +119,48 @@ EDITS: list[tuple] = [
         "                self._apply_speed_scale(drone_model.throttle, int(os.getenv(\"WIFI_UAV_THROTTLE_SPEED_INDEX\", \"2\"))),  # drone-pet-project patch\n",
         2,
     ),
+    (
+        # Watchdog: the page sends sticks 30 times a second. If it stops (window
+        # hidden, browser frozen, tab closed), centre the sticks instead of
+        # repeating the last command.
+        "backend/web_server.py",
+        "            data = await websocket.receive_json()\n",
+        "            try:  # drone-pet-project patch: stick watchdog\n"
+        "                data = await asyncio.wait_for(websocket.receive_json(), timeout=0.5)\n"
+        "            except asyncio.TimeoutError:\n"
+        "                if flight_controller and not (plugin_manager and plugin_manager.running()):\n"
+        "                    flight_controller.set_axes_from(\"watchdog\", 0, 0, 0, 0)\n"
+        "                continue\n",
+    ),
+    (
+        "backend/web_server.py",
+        "        logger.info(\"[WebSocket] Client disconnected\")\n",
+        "        logger.info(\"[WebSocket] Client disconnected\")\n"
+        "        if flight_controller:  # drone-pet-project patch: centre sticks when the page goes away\n"
+        "            flight_controller.set_axes_from(\"disconnect\", 0, 0, 0, 0)\n",
+    ),
+    (
+        # Stuck keys: switching to another window while holding a key means the
+        # page never sees the key-up, so that stick stayed at full.
+        "frontend/src/hooks/useControls.ts",
+        "  /* ------------- helpers / commands ------------------------- */\n",
+        "  /* drone-pet-project patch: release all sticks when the window loses focus */\n"
+        "  useEffect(() => {\n"
+        "    const release = () => {\n"
+        "      axesRef.current = { throttle: 0, yaw: 0, pitch: 0, roll: 0 };\n"
+        "      setAxes({ ...axesRef.current });\n"
+        "    };\n"
+        "    const onVisibility = () => { if (document.hidden) release(); };\n"
+        "    window.addEventListener(\"blur\", release);\n"
+        "    document.addEventListener(\"visibilitychange\", onVisibility);\n"
+        "    return () => {\n"
+        "      window.removeEventListener(\"blur\", release);\n"
+        "      document.removeEventListener(\"visibilitychange\", onVisibility);\n"
+        "    };\n"
+        "  }, []);\n"
+        "\n"
+        "  /* ------------- helpers / commands ------------------------- */\n",
+    ),
 ]
 
 
