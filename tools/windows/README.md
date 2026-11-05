@@ -35,7 +35,12 @@ filter, follow logic) on the webcam and shows what it would tell the drone.
 - A real blinking light: open `tools/strobe.html` full screen on any other screen.
 - **R** reset, **Q** quit. `--camera 1` picks another camera.
 
-## Flying through the phone (PC never leaves home Wi-Fi)
+## Flying through the phone (control only, no video)
+
+Tested 5 Nov: controls reach the drone this way, but video cannot: the drone sends video
+from udp/1234 while we talk to udp/8800, and Android's tethering NAT drops replies from a
+different port. Use `start_drone.bat` with phone tethering for internet instead.
+
 
 `start_drone_via_phone.bat`: the phone joins the drone's Wi-Fi and the PC reaches the
 drone over USB tethering, so the PC stays on home Wi-Fi the whole time. It closes the
@@ -43,6 +48,13 @@ WiFi UAV app, turns the phone's mobile data off (back on at the end), joins the 
 to the drone (`adb shell cmd wifi connect-network`), checks USB tethering (opens
 Settings in scrcpy if needed), then with one admin prompt routes the drone's subnet
 through the phone and keeps home Wi-Fi for internet, and starts Turbodrone.
+
+## Video and Windows Firewall
+
+`start_drone.bat` adds one inbound firewall rule ("Turbodrone drone video", UDP from the
+drone's subnet) the first time, because the video arrives from udp/1234, which Windows
+otherwise treats as uninvited. It also makes the phone forget the drone's network so the
+phone stays on home Wi-Fi and the drone serves the PC.
 
 ## Every flight
 

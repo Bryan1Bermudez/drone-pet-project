@@ -145,6 +145,7 @@ function Test-Phone {
 
 function Enable-PhoneTether {
     # Returns the tether adapter, or $null if it could not be turned on.
+    Release-PhoneFromDrone
     $t = Get-TetherAdapter
     if ($t) { Write-Host "Phone USB tethering is on ($($t.Name)): you stay online while flying." -ForegroundColor Green; return $t }
     if (-not (Test-Phone)) {
@@ -178,6 +179,34 @@ function Test-Internet {
         return ($r.Content -match 'Microsoft Connect Test')
     }
     catch { return $false }
+}
+
+function Add-VideoFirewallRule([string]$droneNet) {
+    # The drone sends video FROM udp/1234 while we talk TO udp/8800, so Windows Firewall
+    # sees the video as uninvited and drops it. Allow inbound UDP from the drone's subnet.
+    $name = "Turbodrone drone video"
+    if (Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue) { return }
+    Write-Host "One-time setup: letting the drone's video through Windows Firewall (approve the admin prompt)..." -ForegroundColor Yellow
+    $cmd = "New-NetFirewallRule -DisplayName '$name' -Direction Inbound -Protocol UDP -RemoteAddress $droneNet/24 -Action Allow -Profile Any | Out-Null"
+    try { Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $cmd" }
+    catch { Write-Host "Skipped. Without it there will be no video. Admin PowerShell: $cmd" -ForegroundColor Yellow }
+}
+
+function Release-PhoneFromDrone {
+    # If the phone is (or auto-joins) the drone's network, forget it there so the phone goes
+    # back to home Wi-Fi and the drone talks to the PC. The drone serves one client at a time.
+    if (-not (Test-Phone)) { return }
+    $status = (adb shell cmd wifi status 2>$null | Out-String)
+    foreach ($line in ((adb shell cmd wifi list-networks 2>$null | Out-String) -split "`n")) {
+        if ($line -match '^\s*(\d+)\s+(.*?)\s{2,}') {
+            $id = $Matches[1]; $name = $Matches[2]
+            if ($name -match $DronePattern) {
+                adb shell cmd wifi forget-network $id 2>$null | Out-Null
+                Write-Host "Phone: forgot '$name' so it goes back to home Wi-Fi."
+            }
+        }
+    }
+    if ($status -match 'connected to "([^"]+)"' -and $Matches[1] -match $DronePattern) { Start-Sleep -Seconds 5 }
 }
 
 # ---------------------------------------------------------------- main
@@ -288,6 +317,7 @@ try {
     }
     $env:DRONE_IP = $gw
     Write-Host "Drone address: $gw"
+    Add-VideoFirewallRule ($gw -replace '\.\d+$', '.0')
 
     $backend = Start-Process cmd.exe -ArgumentList '/k title Drone backend & venv\Scripts\python.exe -m uvicorn web_server:app' -WorkingDirectory (Join-Path $turbo "backend") -PassThru
     $frontend = Start-Process cmd.exe -ArgumentList '/k title Drone frontend & npm.cmd run dev' -WorkingDirectory (Join-Path $turbo "frontend") -PassThru

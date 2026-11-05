@@ -1,3 +1,7 @@
+# CONTROL ONLY: the drone sends video from udp/1234 to whatever port talked to it on
+# udp/8800; Android's tethering NAT drops that, so no video arrives this way. For video
+# use start_drone.bat (PC Wi-Fi on the drone, phone tethering for internet).
+#
 # Fly the drone THROUGH THE PHONE: the phone joins the drone's Wi-Fi, the PC stays on
 # home Wi-Fi and reaches the drone over the USB cable (USB tethering).
 #
@@ -216,5 +220,14 @@ finally {
         Write-Host "Phone internet check restored."
     }
     if ($dataWasOn) { PhoneShell "svc data enable" | Out-Null; Write-Host "Phone mobile data back on." }
+    foreach ($line in ((PhoneShell "cmd wifi list-networks") -split "`n")) {
+        if ($line -match '^\s*(\d+)\s+(.*?)\s{2,}') {
+            $id = $Matches[1]; $name = $Matches[2]
+            if ($name -match $DronePattern) {
+                PhoneShell "cmd wifi forget-network $id" | Out-Null
+                Write-Host "Phone: forgot '$name' so it goes back to home Wi-Fi."
+            }
+        }
+    }
     Write-Host "Done. Turn the drone off and the phone goes back to your home Wi-Fi by itself."
 }

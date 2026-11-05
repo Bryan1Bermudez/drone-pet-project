@@ -63,6 +63,12 @@ Webcam test mode (no drone, stays online): `tools/webcam_follow.py`
 drone view that turns and zooms with the commands, and `tools/strobe.html` as a
 stand-in light. Tests: `tools/tests/test_webcam_follow.py`.
 
+Video finding (5 Nov): the F19 sends video from udp/1234 to the port that talked to it on
+udp/8800 (matches Turbodrone's K417 notes). Through-the-phone NAT therefore carries
+controls but not video, and Windows Firewall drops it on direct Wi-Fi unless allowed;
+`start_drone.bat` now adds that rule. Working plan: PC Wi-Fi on the drone, phone on home
+Wi-Fi with USB tethering for internet.
+
 ## The drone: what to get (original shortlist)
 
 First choice is a laptop-controlled camera drone, so nothing needs building or printing:
