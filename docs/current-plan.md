@@ -19,7 +19,24 @@ picking this up, can continue without the earlier conversation.
   ready-made drone that flies about 10 to 13 minutes, plus one or two spare batteries.
   Longer term (UWB phase), a 3 to 3.5 inch drone on 18650 Li-ion cells gives 10 to 15+ min.
 
-## The drone: what to get
+## Drone bought (5 November 2026)
+
+**Contixo F19 Arvo**, 40 USD at Best Buy Melbourne (1900 Evans Rd). Chosen over a
+Snaptain S5C Elite (100 USD, uses Snaptain's own app, no known protocol).
+
+- Phone app: **WiFi UAV** (confirmed on the box), so it belongs to Turbodrone's
+  `wifi_uav` family (same as Karuisrc K417, FlyVista V88, D16). The F19 itself is not on
+  Turbodrone's tested list, so the protocol still has to be confirmed.
+- Brushless motors, optical-flow hover, IR obstacle avoidance, 2 batteries, own remote.
+- Wi-Fi network: `Contixo-F19-XXXX` (from the manual).
+- Keep the receipt and box until the laptop test passes (Best Buy return window).
+
+First test (props off): connect the laptop to the drone's Wi-Fi, run Turbodrone with
+`DRONE_TYPE=wifi_uav` in `backend/.env`, `uvicorn web_server:app` in `backend`,
+`npm run dev` in `frontend`, open http://localhost:5173. Note Turbodrone's "Land" button
+cuts the motors immediately (acts as an E-stop).
+
+## The drone: what to get (original shortlist)
 
 First choice is a laptop-controlled camera drone, so nothing needs building or printing:
 
@@ -37,7 +54,7 @@ paying local hobby-shop prices for parts.
 
 ## Next tasks
 
-1. **Get a drone** from the list above. Search Facebook Marketplace near Melbourne, FL
+1. ~~**Get a drone**~~ Done: Contixo F19 Arvo (see above). Original step: Search Facebook Marketplace near Melbourne, FL
    (within 10 miles) for: Tello, D16, E58, E88, S20, "wifi fpv drone". Ask sellers which
    app the drone uses and its Wi-Fi network name.
 2. **If it is a toy drone, write an adapter**: copy `tools/tello_follow.py`, keep the blob
