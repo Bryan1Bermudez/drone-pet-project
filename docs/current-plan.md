@@ -49,8 +49,11 @@ biggest software noise saving once following works.
 PC networking: one Wi-Fi card cannot join the drone and home Wi-Fi at once (a VM does
 not help; it shares the same card). For now the PC swaps networks for each test.
 Checked 5 Nov: the PC's card is a MediaTek MT7922 (RZ616); `tools/windows/check_dual_sta.py`
-reports no Windows 11 Dual STA support, so it cannot hold two Wi-Fi connections. Phone
-tethering is out (broken screen) and Ethernet is not allowed in the apartment.
+reports no Windows 11 Dual STA support, so it cannot hold two Wi-Fi connections. Ethernet is not allowed in the apartment.
+**Working setup (5 Nov):** the Razr already had USB debugging on; after authorising the PC
+(`adb devices` shows `device`), `scrcpy` (winget `Genymobile.scrcpy`) mirrors the phone's
+broken inner screen to the PC, and USB tethering from the phone keeps the PC online while
+its Wi-Fi is on the drone.
 **To do:** buy a ~10 to 20 USD dual-band USB Wi-Fi adapter (`start_drone.bat` already
 supports two adapters) so the PC keeps internet while its Wi-Fi stays on the drone, and add a
 one-click Windows launcher that joins the drone network and starts Turbodrone.

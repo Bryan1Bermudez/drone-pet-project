@@ -61,7 +61,10 @@ virtual machine shares the same card. Ways around it, best first:
    Phone: turn on Bluetooth tethering (Android) or Personal Hotspot (iPhone). PC: pair
    the phone, then Control Panel > Devices and Printers > right-click the phone >
    Connect using > Access point.
-4. **USB tethering from a phone** (free).
+4. **USB tethering from a phone** (free). Phone screen broken? If USB debugging is on,
+   `winget install Genymobile.scrcpy`, approve the PC once (`adb devices` must say
+   `device`), run `scrcpy` to use the phone from the PC, then turn on Settings >
+   Network & internet > Hotspot & tethering > USB tethering.
 
 If Windows keeps dropping the drone's Wi-Fi on the second adapter, allow simultaneous
 connections once from an admin PowerShell:
