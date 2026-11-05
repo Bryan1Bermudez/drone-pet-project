@@ -35,6 +35,15 @@ filter, follow logic) on the webcam and shows what it would tell the drone.
 - A real blinking light: open `tools/strobe.html` full screen on any other screen.
 - **R** reset, **Q** quit. `--camera 1` picks another camera.
 
+## Flying through the phone (PC never leaves home Wi-Fi)
+
+`start_drone_via_phone.bat`: the phone joins the drone's Wi-Fi and the PC reaches the
+drone over USB tethering, so the PC stays on home Wi-Fi the whole time. It closes the
+WiFi UAV app, turns the phone's mobile data off (back on at the end), joins the phone
+to the drone (`adb shell cmd wifi connect-network`), checks USB tethering (opens
+Settings in scrcpy if needed), then with one admin prompt routes the drone's subnet
+through the phone and keeps home Wi-Fi for internet, and starts Turbodrone.
+
 ## Every flight
 
 Double-click `start_drone.bat`. It joins the drone's `Contixo-F19-xxxx` network, reads
