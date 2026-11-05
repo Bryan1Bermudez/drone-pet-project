@@ -75,6 +75,23 @@ function Get-DroneIpFromPhone {
     return $null
 }
 
+function Get-PhoneTetherIp {
+    # The phone's IPv4 address on its USB tethering interface (rndis0 / ncm0 / usb0).
+    $iface = $null
+    foreach ($line in ((PhoneShell "ip -4 addr") -split "`n")) {
+        if ($line -match '^\d+:\s+([^:@\s]+)') { $iface = $Matches[1] }
+        elseif ($iface -match '^(rndis|ncm|usb)' -and $line -match 'inet (\d+\.\d+\.\d+\.\d+)/') { return $Matches[1] }
+    }
+    return $null
+}
+
+function Get-TetherUpstream {
+    foreach ($line in ((PhoneShell "dumpsys tethering") -split "`n")) {
+        if ($line -match '(?i)current upstream|upstream iface|upstreamNetwork|mUpstream') { return $line.Trim() }
+    }
+    return "(unknown)"
+}
+
 # ---------------------------------------------------------------- checks
 
 $turbo = Find-Turbodrone
@@ -126,26 +143,41 @@ try {
         while ((Get-Date) -lt $deadline -and -not $t) { Start-Sleep -Seconds 2; $t = Get-TetherAdapter }
     }
     if (-not $t) { throw "USB tethering did not come on." }
-    $cfg = Get-NetIPConfiguration -InterfaceIndex $t.ifIndex -ErrorAction SilentlyContinue
-    $phoneGw = @($cfg.IPv4DefaultGateway | ForEach-Object { $_.NextHop }) | Where-Object { $_ } | Select-Object -First 1
-    if (-not $phoneGw) {
-        Start-Sleep -Seconds 4
-        $cfg = Get-NetIPConfiguration -InterfaceIndex $t.ifIndex -ErrorAction SilentlyContinue
-        $phoneGw = @($cfg.IPv4DefaultGateway | ForEach-Object { $_.NextHop }) | Where-Object { $_ } | Select-Object -First 1
+    # Android often hands out no gateway when its upstream has no internet, so read the
+    # phone's own address on the USB link from the phone instead.
+    $phoneIp = $null
+    $deadline = (Get-Date).AddSeconds(15)
+    while ((Get-Date) -lt $deadline -and -not $phoneIp) { $phoneIp = Get-PhoneTetherIp; if (-not $phoneIp) { Start-Sleep -Seconds 1 } }
+    $pcIp = @(Get-NetIPAddress -InterfaceIndex $t.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue | ForEach-Object { $_.IPAddress }) | Where-Object { $_ } | Select-Object -First 1
+    $upstream = Get-TetherUpstream
+    Write-Host "  PC side: $($t.Name) ($($t.InterfaceDescription)) $pcIp"
+    Write-Host "  Phone side: $phoneIp"
+    Write-Host "  Phone shares: $upstream"
+    if (-not $phoneIp) {
+        Write-Host "  Phone interfaces:"; Write-Host (PhoneShell "ip -4 addr")
+        throw "Could not find the phone's USB tethering address."
     }
-    if (-not $phoneGw) { throw "The tethering connection has no gateway yet. Unplug and replug the phone, then try again." }
-    Write-Host "  Tethering adapter: $($t.Name), phone at $phoneGw" -ForegroundColor Green
+    $prefix = ($phoneIp -replace '\.\d+$', '')
+    $fixIp = ""
+    if (-not ($pcIp -and $pcIp.StartsWith("$prefix."))) {
+        # Windows got no DHCP address on the USB link: give it a fixed one next to the phone.
+        Write-Host "  The PC has no address on the USB link; adding $prefix.200" -ForegroundColor Yellow
+        $fixIp = "New-NetIPAddress -InterfaceIndex $($t.ifIndex) -IPAddress $prefix.200 -PrefixLength 24 -ErrorAction SilentlyContinue | Out-Null; "
+    }
 
     Step "5. Routing the drone through the phone (approve the admin prompt)"
-    $cmd = "Set-NetIPInterface -InterfaceIndex $($t.ifIndex) -AddressFamily IPv4 -InterfaceMetric 5000; " +
-           "route delete $droneNet 2>`$null | Out-Null; route add $droneNet mask 255.255.255.0 $phoneGw metric 1 if $($t.ifIndex)"
+    $cmd = $fixIp + "Set-NetIPInterface -InterfaceIndex $($t.ifIndex) -AddressFamily IPv4 -InterfaceMetric 5000; " +
+           "route delete $droneNet 2>`$null | Out-Null; route add $droneNet mask 255.255.255.0 $phoneIp metric 1 if $($t.ifIndex)"
     try { Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -Command $cmd" }
     catch { throw "The admin prompt was declined; the PC cannot reach the drone without the route." }
     $route = Get-NetRoute -DestinationPrefix "$droneNet/24" -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($route) { Write-Host "  Route added: $droneNet/24 via $phoneGw" -ForegroundColor Green }
+    if ($route) { Write-Host "  Route added: $droneNet/24 via phone $phoneIp" -ForegroundColor Green }
     else { Write-Host "  Could not confirm the route; continuing." -ForegroundColor Yellow }
     $find = Find-NetRoute -RemoteIPAddress $droneIp -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($find) { Write-Host "  Windows sends drone traffic via: $($find.InterfaceAlias)" }
+    if ($upstream -notmatch 'wlan') {
+        Write-Host "  Warning: the phone may not be sharing its Wi-Fi (see 'Phone shares' above). If there is no video, send this window to Claude." -ForegroundColor Yellow
+    }
 
     Step "6. Starting Turbodrone"
     $env:DRONE_IP = $droneIp
