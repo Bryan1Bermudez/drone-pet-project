@@ -151,15 +151,17 @@ function Enable-PhoneTether {
         Write-Host "Phone not found over USB (plug it in; 'adb devices' must say 'device'). You will be offline while flying." -ForegroundColor Yellow
         return $null
     }
-    Write-Host "Opening the phone's tethering settings in a scrcpy window..."
-    # "am start" exits 0 even when the screen does not exist, so check its output.
-    $res = (adb shell am start -n com.android.settings/.TetherSettings 2>&1 | Out-String)
-    if ($res -match 'Error|does not exist') {
-        $res = (adb shell am start -n 'com.android.settings/.Settings$TetherSettingsActivity' 2>&1 | Out-String)
+    if (-not (Get-Command scrcpy -ErrorAction SilentlyContinue)) {
+        Write-Host "scrcpy not found (winget install Genymobile.scrcpy). You will be offline while flying." -ForegroundColor Yellow
+        return $null
     }
-    if ($res -match 'Error|does not exist') { Write-Host "Could not open tethering settings directly; open Settings > Network & internet > Hotspot & tethering in scrcpy." }
-    if (Get-Command scrcpy -ErrorAction SilentlyContinue) { Start-Process scrcpy -WindowStyle Minimized | Out-Null; Start-Sleep -Seconds 2 }
-    Write-Host "In the scrcpy window, switch ON 'USB tethering'. Waiting up to 90 s..." -ForegroundColor Yellow
+    # A virtual screen that only exists in the scrcpy window, so the phone's broken
+    # inner screen and the small cover screen do not matter.
+    Write-Host "Opening the phone's Settings on a virtual screen (scrcpy)..."
+    Start-Process scrcpy -ArgumentList '--new-display=1080x1920', '--start-app=com.android.settings' | Out-Null
+    Start-Sleep -Seconds 3
+    Write-Host "In the scrcpy window: Network & internet > Hotspot & tethering > USB tethering ON." -ForegroundColor Yellow
+    Write-Host "Waiting up to 90 s for tethering..." -ForegroundColor Yellow
     $deadline = (Get-Date).AddSeconds(90)
     while ((Get-Date) -lt $deadline) {
         $t = Get-TetherAdapter
