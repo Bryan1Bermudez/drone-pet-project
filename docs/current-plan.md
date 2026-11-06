@@ -95,7 +95,12 @@ the F19's avoidance is unusable under PC control. Safety has to come from our ow
 (speed cap, looming back-off, plain-wall rules, hover then land when lost, land-and-wait,
 optional relaunch). Real crash cause reported 6 Nov: sideways drift (not forward). Added camera drift hold
 (HoverHoldPlugin + roll correction in follow mode), gains via DRIFT_* in backend/.env;
-needs tuning in flight. Known limit: beacons smaller than ~8 px radius in the 640 px video are
+needs tuning in flight. Camera quality (6 Nov): Turbodrone always rebuilds frames with fixed quality-50 JPEG
+tables written in natural order; the drone's frames carry their own quality byte. Added a
+`[drone-video]` log (resolution, quality, active camera), opt-in quality-matched tables
+(WIFI_UAV_JPEG_TABLES=quality, unproven: a synthetic test favoured stock), and
+`tools/grab_frames.py` to save real frames for offline header tests. Next: get a real frame.
+Known limit: beacons smaller than ~8 px radius in the 640 px video are
 not detected (4x downsample, 12 px minimum), which limits follow distance.
 Option for using the drone's own avoidance: identify the remote's 2.4 GHz chip (FCC ID or
 board photo); if DIY-Multiprotocol supports it, an nRF24L01+ module could send sticks and

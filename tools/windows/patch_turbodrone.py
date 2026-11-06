@@ -372,6 +372,55 @@ EDITS: list[tuple] = [
         "                    plugin_manager.stop_all()\n",
     ),
     (
+        # Video settings log: the drone's own frame header says width, height, JPEG
+        # quality and which camera (main / flow) is streaming. Log it when it changes.
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "        if len(payload) < 12 or payload[0] != 0x93 or payload[1] == 0x01:\n"
+        "            return\n",
+        "        if len(payload) >= 56 and payload[0] == 0x93 and payload[1] == 0x01:  # drone-pet-project patch\n"
+        "            info = (int.from_bytes(payload[44:46], \"little\"), int.from_bytes(payload[46:48], \"little\"),\n"
+        "                    payload[48], payload[52], payload[53])\n"
+        "            if info != getattr(self, \"_video_info\", None):\n"
+        "                self._video_info = info\n"
+        "                logger.info(\"[drone-video] %dx%d jpeg-quality=%d main-camera=%d flow-camera=%d\", *info)\n"
+        "        if len(payload) < 12 or payload[0] != 0x93 or payload[1] == 0x01:\n"
+        "            return\n",
+    ),
+    (
+        # JPEG tables matched to the drone's quality. Stock Turbodrone always uses the
+        # quality-50 tables; if the camera encodes at another quality, brightness,
+        # contrast and colour come out wrong. WIFI_UAV_JPEG_TABLES=quality scales the
+        # tables to the quality byte in each frame (stock = unchanged behaviour).
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "        jpeg = self._jpeg_header + slot.ordered_payload() + EOI\n",
+        "        jpeg = self._header_for(quality) + slot.ordered_payload() + EOI  # drone-pet-project patch\n",
+    ),
+    (
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+        "    def _header_for(self, quality) -> bytes:  # drone-pet-project patch: JPEG tables\n"
+        "        try:\n"
+        "            q = int(quality)\n"
+        "        except Exception:\n"
+        "            return self._jpeg_header\n"
+        "        if os.getenv(\"WIFI_UAV_JPEG_TABLES\", \"stock\").strip().lower() != \"quality\" or not 1 <= q <= 100 or q == 50:\n"
+        "            return self._jpeg_header\n"
+        "        cache = self.__dict__.setdefault(\"_hdr_cache\", {})\n"
+        "        if q not in cache:\n"
+        "            from utils import wifi_uav_jpeg as J\n"
+        "            scale = 5000 // q if q < 50 else 200 - 2 * q\n"
+        "            sc = lambda tbl: [max(1, min(255, (v * scale + 50) // 100)) for v in tbl]\n"
+        "            # stock header: SOI(2) + DQT luma(69) + DQT chroma(69) + SOF + SOS\n"
+        "            cache[q] = (bytes(J.SOI) + J.generate_dqt_segment(0, sc(J.std_luminance_qt))\n"
+        "                        + J.generate_dqt_segment(1, sc(J.std_chrominance_qt)) + self._jpeg_header[140:])\n"
+        "            logger.info(\"[drone-video] using JPEG tables for quality %d\", q)\n"
+        "        return cache[q]\n"
+        "\n"
+        "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+        1,
+        "def _header_for(self, quality) -> bytes:  # drone-pet-project patch",
+    ),
+    (
         # Probe bits: extra bits OR-ed into command byte 6 and mode byte 7 of every stick
         # packet, set from the control socket ("raw_bits"), to search for an undocumented
         # command such as obstacle avoidance. Zero unless tools/oa_probe.py sets them.
