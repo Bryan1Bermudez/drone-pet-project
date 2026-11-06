@@ -240,6 +240,8 @@ try {
     Write-Host "  C = calibrate gyro (on a flat floor, before takeoff)   Space = emergency motor stop"
     Write-Host "  Trim (if it keeps drifting one way, nudge the opposite way; saved between flights):"
     Write-Host "    I / K = forward / back    J / L = left / right    U / O = turn left / right    0 = reset"
+    Write-Host "  Follow mode: take off, then switch 'BeaconFollowPlugin' ON in the Plugins panel."
+    Write-Host "    Any movement key, Space or Land switches it off and gives you control back."
     Write-Host "Your PC is still on home Wi-Fi."
     Read-Host "Press Enter HERE to stop"
 }

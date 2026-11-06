@@ -107,10 +107,11 @@ class VirtualDrone:
 class Pipeline:
     """Blob finder + blink filter + follow logic, as on the drone."""
 
-    def __init__(self, blink_hz: float = 2.5, target_area: float = 0.002, channel: int = 1):
+    def __init__(self, blink_hz: float = 2.5, target_area: float = 0.002, channel: int = 1, **cfg_overrides):
         # Same lowered gains as tello_follow.py: Wi-Fi video adds latency.
-        self.cfg = VisualConfig(kp_yaw=120.0, yaw_max=60, kp_pitch=60.0, pitch_max=40,
-                                target_area_frac=target_area)
+        gains = dict(kp_yaw=120.0, yaw_max=60, kp_pitch=60.0, pitch_max=40)
+        gains.update(cfg_overrides)
+        self.cfg = VisualConfig(target_area_frac=target_area, **gains)
         self.channel = channel
         self.beacon = BlinkTracker(BlinkConfig(blink_hz=blink_hz))
         self.follower = VisualFollower(self.cfg)

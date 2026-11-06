@@ -126,6 +126,29 @@ Play Store inside scrcpy so you can tap Install.
 | `WIFI_UAV_VIDEO_PORTS` | ports to request video on |
 | `DRONE_TYPE` | `wifi_uav` (or `wifi_uav_uav` to try the other packet family) |
 
+## Follow mode (BeaconFollowPlugin)
+
+`install.bat` copies `tools/turbodrone_plugin/beacon_follow.py` into Turbodrone's plugins
+and turns plugins on. Take off, then switch **BeaconFollowPlugin** ON in the page's
+Plugins panel. It runs the blink-beacon tracker on the drone's video and steers yaw and
+pitch (the drone holds its own height). Safety layer (`tools/follow_core.py`, tested in
+`tools/tests/test_follow_core.py`):
+
+- speed cap (yaw 0.35, pitch 0.30 of full stick, before the speed tier) and smooth changes
+- looming: if something in view would reach the drone within 1.2 s, back off for 0.8 s
+  (cannot see plain, textureless walls)
+- beacon lost: hover in place, land after 6 s (15 s grace at start while the beacon is
+  first confirmed)
+- land-and-wait: wearer still for 20 s -> land; `FOLLOW_RELAUNCH=1` makes it take off
+  again when the wearer moves (off by default)
+- any movement key, Space or Land switches the plugin off
+
+Settings are the `FOLLOW_*` lines in `turbodrone\backend\.env`.
+
+First test with PROPS OFF: open `tools/strobe.html` full screen on the monitor, point the
+drone's camera at it, click Takeoff (motors spin), switch the plugin ON, and watch the
+lime box and the commands; move the drone by hand to see it react.
+
 ## Obstacle avoidance on the F19: what is known, and how to find the command
 
 Facts (checked 6 Nov 2026):

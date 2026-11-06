@@ -30,7 +30,17 @@ if errorlevel 1 (
 )
 
 copy /y "%HERE%turbodrone.env" "%TURBO%\backend\.env" >nul
+for %%I in ("%HERE%..\..") do set "REPO=%%~fI"
+>>"%TURBO%\backend\.env" echo DRONE_PET_PROJECT=%REPO%
 echo Wrote drone settings to %TURBO%\backend\.env
+
+copy /y "%HERE%..\turbodrone_plugin\beacon_follow.py" "%TURBO%\backend\plugins\beacon_follow.py" >nul
+if errorlevel 1 (
+  echo Could not copy the follow plugin.
+  pause
+  exit /b 1
+)
+echo Installed the follow plugin (BeaconFollowPlugin).
 
 echo Installing web page packages (needs internet)...
 pushd "%TURBO%\frontend"

@@ -91,7 +91,9 @@ the probe bits caused no visible reaction, and avoidance switched on with the re
 NOT survive switching the remote off; remote and PC cannot be on together. Conclusion:
 the F19's avoidance is unusable under PC control. Safety has to come from our own code
 (speed cap, camera looming stop, land when the beacon is lost).
-Next: drive Turbodrone from the blink tracker; later a camera-based drift/looming assist.
+**Follow mode built (6 Nov):** Turbodrone plugin `BeaconFollowPlugin` with safety layer
+(speed cap, looming back-off, hover then land when lost, land-and-wait, optional relaunch).
+Next: props-off test with `tools/strobe.html` on the monitor, then first follow flight.
 
 ## The drone: what to get (original shortlist)
 

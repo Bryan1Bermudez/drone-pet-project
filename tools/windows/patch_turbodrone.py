@@ -356,6 +356,22 @@ EDITS: list[tuple] = [
         "            return\n",
     ),
     (
+        # Emergency stop and Land also switch any follow plugin off, so it cannot keep
+        # steering after the pilot has taken over.
+        "backend/web_server.py",
+        "            elif msg_type in (\"estop\", \"emergency_stop\"):\n",
+        "            elif msg_type in (\"estop\", \"emergency_stop\"):\n"
+        "                if plugin_manager:  # drone-pet-project patch: pilot override\n"
+        "                    plugin_manager.stop_all()\n",
+    ),
+    (
+        "backend/web_server.py",
+        "            elif msg_type == \"land\":\n",
+        "            elif msg_type == \"land\":\n"
+        "                if plugin_manager:  # drone-pet-project patch: pilot override\n"
+        "                    plugin_manager.stop_all()\n",
+    ),
+    (
         # Probe bits: extra bits OR-ed into command byte 6 and mode byte 7 of every stick
         # packet, set from the control socket ("raw_bits"), to search for an undocumented
         # command such as obstacle avoidance. Zero unless tools/oa_probe.py sets them.
