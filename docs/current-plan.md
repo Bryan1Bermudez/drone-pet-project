@@ -71,6 +71,12 @@ to udp/1234 before START so the return path opens. Working plan, the user's choi
 PHONE joins the drone, the PC stays on home Wi-Fi (`start_drone.bat` = phone relay). Never
 make the phone forget the drone network (its screen is broken; joining is done over adb).
 
+Controls with video (6 Nov): once video streamed through the phone, nothing responded.
+Cause: every video frame request carries a stick command and stock Turbodrone fills it
+with a fixed neutral one, flooding out the real RC packets. The patch now embeds the live
+sticks (no one-shot bits), as the WiFi UAV app does. Video image is dark/red-tinted; look
+at JPEG header/colour handling later.
+
 ## The drone: what to get (original shortlist)
 
 First choice is a laptop-controlled camera drone, so nothing needs building or printing:

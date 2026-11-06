@@ -19,6 +19,9 @@ What it changes (each edit is marked "drone-pet-project patch"):
 * backend: before asking for video, send an empty packet to udp/1234 (where the
   drone's video comes from) so a phone's tethering NAT or Windows Firewall lets
   the video back in (WIFI_UAV_PUNCH_PORTS).
+* backend: video frame requests carry the live stick command instead of a fixed
+  neutral one (stock behaviour flooded out the real sticks once video streamed);
+  one-shot takeoff/land/stop/calibrate/flip bits stay in the RC packets only.
 * frontend: speed selector starts on "Medium"; key C = gyro calibration (on the
   ground only), Space = emergency motor stop.
 
@@ -141,6 +144,50 @@ EDITS: list[tuple] = [
         "    def send_start_command(self) -> None:\n"
         "        for port in [int(p) for p in os.getenv(\"WIFI_UAV_PUNCH_PORTS\", \"1234\").split(\",\") if p.strip()]:\n"
         "            self._safe_sendto(b\"\", port, \"PUNCH\")  # drone-pet-project patch: open video return path\n",
+    ),
+    (
+        # Live sticks in the video requests. Every frame request also carries a stick
+        # command; stock Turbodrone puts a fixed "centred, no buttons" one there, which
+        # floods out the real RC packets once video streams (F19: nothing responded with
+        # video on). The WiFi UAV app embeds the real command, so do the same: current
+        # stick bytes and headless flag, camera tilt bits, but never the one-shot
+        # takeoff/land/stop/calibrate/flip bits (those only go in the RC packets).
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "    build_native_ack_packet,\n)\n",
+        "    build_native_ack_packet,\n    NEUTRAL_EXTENDED_COMMAND,  # drone-pet-project patch\n)\n",
+    ),
+    (
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "            rc_adapter.set_socket(self._sock)\n",
+        "            self._rc_adapter = rc_adapter  # drone-pet-project patch: live sticks in requests\n"
+        "            rc_adapter.set_socket(self._sock)\n",
+    ),
+    (
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "        rqst_a = build_native_ack_packet(command_seq, [])\n"
+        "        rqst_b = build_native_ack_packet(command_seq, self._build_ack_slots(frame_id))\n",
+        "        cmd = self._live_command()  # drone-pet-project patch\n"
+        "        rqst_a = build_native_ack_packet(command_seq, [], command=cmd)\n"
+        "        rqst_b = build_native_ack_packet(command_seq, self._build_ack_slots(frame_id), command=cmd)\n",
+    ),
+    (
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+        "    def _live_command(self) -> bytes:  # drone-pet-project patch\n"
+        "        \"\"\"Extended 66 14 command with the current sticks, no one-shot action bits.\"\"\"\n"
+        "        rc = getattr(self, \"_rc_adapter\", None)\n"
+        "        controls = getattr(rc, \"_last_controls\", None) if rc is not None else None\n"
+        "        if not controls or len(controls) != 4:\n"
+        "            return NEUTRAL_EXTENDED_COMMAND\n"
+        "        tilt = int(getattr(rc, \"_last_command\", 0)) & 0xC0\n"
+        "        headless = int(getattr(rc, \"_last_headless\", 0x02)) & 0xFF\n"
+        "        body = bytes([0x66, 0x14] + [int(c) & 0xFF for c in controls] + [tilt, headless]) + bytes(10)\n"
+        "        xor = 0\n"
+        "        for b in body[2:18]:\n"
+        "            xor ^= b\n"
+        "        return body + bytes([xor, 0x99])\n"
+        "\n"
+        "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
     ),
     (
         # Watchdog: the page sends sticks 30 times a second. If it stops (window
