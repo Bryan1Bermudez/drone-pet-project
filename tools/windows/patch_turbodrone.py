@@ -325,10 +325,16 @@ EDITS: list[tuple] = [
         "            changed = \"  changed: \" + \", \".join(diffs)\n"
         "        decoded = \"\"\n"
         "        if len(body) >= 7 and body[0] == 0x88 and body[-1] == 0x55:\n"
-        "            decoded = f\"  fly-state={body[2]} battery={body[3]} flags=0x{body[4]:02x}\"\n"
+        "            fl = body[4]  # bit names from the WiFi UAV app's own status parser\n"
+        "            names = [n for b, n in ((0x04, \"rc-ctrl\"), (0x08, \"tilt-cam\"), (0x10, \"headless\"),\n"
+        "                                    (0x20, \"photo\"), (0x40, \"video\"), (0x80, \"light\")) if fl & b]\n"
+        "            decoded = (f\"  fly-state={body[2]} battery={body[3]} flags=0x{fl:02x} speed-tier={fl & 3}\"\n"
+        "                       f\" [{' '.join(names)}]\" + (f\" extra={body[5:-2].hex(' ')}\" if len(body) > 7 else \"\"))\n"
         "        logger.info(\"[drone-status] type=0x%02x len=%d %s%s%s\", mtype, len(body), body[:40].hex(\" \"), decoded, changed)\n"
         "\n"
         "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+        1,
+        "def _note_mcu(self, payload: bytes) -> None:  # drone-pet-project patch",
     ),
     (
         # Probe bits: extra bits OR-ed into command byte 6 and mode byte 7 of every stick
