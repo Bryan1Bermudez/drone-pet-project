@@ -82,7 +82,10 @@ with the PC on home Wi-Fi** (`tools/windows/start_drone.bat`). Remaining: hard t
 hand and drifts toward obstacles (keyboard is all-or-nothing; try Low speed now that the
 neutral-command flood is fixed, a gamepad, good light for the optical-flow hover, gyro
 calibration); very loud (hardware). Added trim keys and `start_drone_indoor.bat`.
-Obstacle avoidance: remote-button only; test whether it stays on under PC control.
+Obstacle avoidance (researched 6 Nov, F19 manual + decompiled WiFi UAV app v2026.09.17):
+remote button 3 only; no app command exists. Patched Turbodrone now logs flight-computer
+status changes (`[drone-status]`) and `tools/oa_probe.py` scans the unused command bits;
+procedure in `tools/windows/README.md`.
 Next: drive Turbodrone from the blink tracker; later a camera-based drift/looming assist.
 
 ## The drone: what to get (original shortlist)

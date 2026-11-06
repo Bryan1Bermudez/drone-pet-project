@@ -126,18 +126,36 @@ Play Store inside scrcpy so you can tap Install.
 | `WIFI_UAV_VIDEO_PORTS` | ports to request video on |
 | `DRONE_TYPE` | `wifi_uav` (or `wifi_uav_uav` to try the other packet family) |
 
-## Obstacle avoidance on the F19
+## Obstacle avoidance on the F19: what is known, and how to find the command
 
-From the F19 manual: avoidance is switched on and off with the **Obstacle Avoidance
-button on the 2.4 GHz remote**. It covers four sides; when something is detected the
-drone stops in place and the remote beeps. While it is on, speed is reduced and the
-fast gear is locked out. Contixo recommends a room of at least 6 x 6 m.
+Facts (checked 6 Nov 2026):
 
-The sensing and the stopping happen on the drone. The WiFi UAV phone app has no
-avoidance command at all (Turbodrone's decompiled-app notes list every command bit:
-takeoff/land, stop, gyro, flip, camera tilt, headless, high/low, tracking), so the PC
-cannot switch it on over Wi-Fi. The open question is whether the mode stays active
-when the PC takes over after the remote turned it on. Test it before relying on it.
+- The official F19 manual: avoidance is toggled only by the remote's button 3. The app's
+  20 controls (manual p.12) do not include it. "If you want to turn on the app control
+  mode, you need to turn off the remote control first", so remote and PC control are not
+  used together.
+- The current WiFi UAV app (v2026.09.17, decompiled): no avoidance string or command
+  anywhere. Its stick packet leaves byte 7 bits 0x08/0x10/0x20/0x40 and byte 6 bits
+  0x10/0x20 unused; a hidden flight-computer command, if any, would be one of those.
+- The flight computer sends status reports to the app (`88 00 <fly-state> <battery>
+  <flags> ... <xor> 55`). The patched Turbodrone logs every change as
+  `[drone-status] ...` in the backend window.
+
+Procedure, no flying, PROPS OFF:
+
+1. Drone on, remote on and paired. Start `start_drone.bat` as usual (PC through the
+   phone). Watch the backend window for `[drone-status]` lines.
+2. Press the remote's avoidance button. If a status byte changes (e.g.
+   `changed: [4] 12->32`) and changes back on the next press, the drone reports the
+   mode: note the byte and values.
+3. With avoidance ON, switch the remote off. If the byte stays, avoidance survives into
+   PC control: arm it with the remote before each flight, then switch the remote off.
+4. Run the bit probe to look for a Wi-Fi command that flips the same byte:
+   `turbodrone\backend\venv\Scripts\python.exe drone-pet-project\tools\oa_probe.py --scan`
+   It sets each candidate bit for 6 s. A bit that flips the byte is the command; tell
+   Claude which one and it goes into the patch as a proper toggle.
+5. If no status byte ever changes, the drone does not report the mode over Wi-Fi; the
+   only remaining check is a careful low flight toward a cushion after step 3.
 
 ## Noise
 

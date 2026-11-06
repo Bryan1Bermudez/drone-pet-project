@@ -190,6 +190,8 @@ EDITS: list[tuple] = [
         "        return body + bytes([xor, 0x99])\n"
         "\n"
         "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+        1,
+        "def _live_command(self) -> bytes:  # drone-pet-project patch",
     ),
     (
         # Trim: steady offsets added to roll/pitch/yaw so a drone that always drifts one
@@ -283,6 +285,75 @@ EDITS: list[tuple] = [
         "  }, []);\n"
         "\n"
         "  /* ------------- helpers / commands ------------------------- */\n",
+    ),
+    (
+        # Status sniffer: the drone's flight computer sends status reports (message type
+        # 0x04, payload at +12; the report itself is 88 00 <fly-state> <battery> <flags>
+        # ... <xor> 55). Log every change so a remote-button toggle such as obstacle
+        # avoidance can be seen from the PC. Off with WIFI_UAV_STATUS_LOG=0.
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "                    # Try to assemble a frame\n"
+        "                    frame = self.handle_payload(payload)\n",
+        "                    self._note_mcu(payload)  # drone-pet-project patch: status sniffer\n"
+        "                    # Try to assemble a frame\n"
+        "                    frame = self.handle_payload(payload)\n",
+    ),
+    (
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+        "    def _note_mcu(self, payload: bytes) -> None:  # drone-pet-project patch: status sniffer\n"
+        "        if len(payload) < 12 or payload[0] != 0x93 or payload[1] == 0x01:\n"
+        "            return\n"
+        "        if os.getenv(\"WIFI_UAV_STATUS_LOG\", \"1\").strip().lower() in (\"0\", \"false\", \"off\"):\n"
+        "            return\n"
+        "        mtype = payload[1]\n"
+        "        plen = int.from_bytes(payload[8:10], \"little\")\n"
+        "        body = bytes(payload[12:12 + plen] if 0 < plen <= len(payload) - 12 else payload[12:])\n"
+        "        if not hasattr(self, \"_mcu_last\"):\n"
+        "            self._mcu_last, self._mcu_log_ts = {}, {}\n"
+        "        last = self._mcu_last.get(mtype)\n"
+        "        if last == body:\n"
+        "            return\n"
+        "        self._mcu_last[mtype] = body\n"
+        "        now = time.time()\n"
+        "        if now - self._mcu_log_ts.get(mtype, 0.0) < 0.25:\n"
+        "            return\n"
+        "        self._mcu_log_ts[mtype] = now\n"
+        "        changed = \"\"\n"
+        "        if last is not None and len(last) == len(body):\n"
+        "            diffs = [f\"[{i}] {last[i]:02x}->{body[i]:02x}\" for i in range(len(body)) if last[i] != body[i]]\n"
+        "            changed = \"  changed: \" + \", \".join(diffs)\n"
+        "        decoded = \"\"\n"
+        "        if len(body) >= 7 and body[0] == 0x88 and body[-1] == 0x55:\n"
+        "            decoded = f\"  fly-state={body[2]} battery={body[3]} flags=0x{body[4]:02x}\"\n"
+        "        logger.info(\"[drone-status] type=0x%02x len=%d %s%s%s\", mtype, len(body), body[:40].hex(\" \"), decoded, changed)\n"
+        "\n"
+        "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+    ),
+    (
+        # Probe bits: extra bits OR-ed into command byte 6 and mode byte 7 of every stick
+        # packet, set from the control socket ("raw_bits"), to search for an undocumented
+        # command such as obstacle avoidance. Zero unless tools/oa_probe.py sets them.
+        "backend/protocols/wifi_uav_rc_protocol_adapter.py",
+        "        headless = 0x03 if drone_model.headless_flag else 0x02\n",
+        "        headless = 0x03 if drone_model.headless_flag else 0x02\n"
+        "        command |= int(getattr(self, \"raw_bits6\", 0)) & 0xFF  # drone-pet-project patch: probe bits\n"
+        "        headless |= int(getattr(self, \"raw_bits7\", 0)) & 0xFF\n",
+    ),
+    (
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "        tilt = int(getattr(rc, \"_last_command\", 0)) & 0xC0\n",
+        "        tilt = (int(getattr(rc, \"_last_command\", 0)) & 0xC0) | (int(getattr(rc, \"raw_bits6\", 0)) & 0x30)  # + probe bits\n",
+    ),
+    (
+        "backend/web_server.py",
+        "            elif msg_type == \"takeoff\":\n",
+        "            elif msg_type == \"raw_bits\":  # drone-pet-project patch: probe bits\n"
+        "                rc = flight_controller.protocol\n"
+        "                rc.raw_bits6 = int(data.get(\"byte6\", 0)) & 0xFF\n"
+        "                rc.raw_bits7 = int(data.get(\"byte7\", 0)) & 0xFF\n"
+        "                logger.info(\"[drone-pet-project] probe bits: byte6=0x%02x byte7=0x%02x\", rc.raw_bits6, rc.raw_bits7)\n"
+        "            elif msg_type == \"takeoff\":\n",
     ),
     (
         # Watchdog: the page sends sticks 30 times a second. If it stops (window
