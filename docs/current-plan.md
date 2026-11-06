@@ -77,6 +77,12 @@ with a fixed neutral one, flooding out the real RC packets. The patch now embeds
 sticks (no one-shot bits), as the WiFi UAV app does. Video image is dark/red-tinted; look
 at JPEG header/colour handling later.
 
+**Milestone (6 Nov): video and full control of the F19 from the PC, through the phone,
+with the PC on home Wi-Fi** (`tools/windows/start_drone.bat`). Remaining: hard to fly by
+hand and drifts toward obstacles (keyboard is all-or-nothing; try Low speed now that the
+neutral-command flood is fixed, a gamepad, good light for the optical-flow hover, gyro
+calibration); very loud (hardware). Next: drive Turbodrone from the blink tracker.
+
 ## The drone: what to get (original shortlist)
 
 First choice is a laptop-controlled camera drone, so nothing needs building or printing:
