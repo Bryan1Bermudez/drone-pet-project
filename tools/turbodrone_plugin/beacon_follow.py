@@ -4,7 +4,11 @@ Installed by drone-pet-project/tools/windows/install.bat as
 turbodrone/backend/plugins/beacon_follow.py. Needs PLUGINS_ENABLED=true and
 DRONE_PET_PROJECT=<path to drone-pet-project> in backend/.env (install.bat writes both).
 
-Use: take off first, then switch "BeaconFollowPlugin" ON in the page's Plugins panel.
+Two plugins:
+  BeaconFollowPlugin  follow the wristband (with drift hold and the safety layer)
+  HoverHoldPlugin     just hold still: cancels sideways / forward drift with the camera
+
+Use: take off first, then switch one of them ON in the page's Plugins panel.
 Any key press on the page stops the plugin and gives you control back.
 
 The logic lives in drone-pet-project/tools/follow_core.py (tested headless):
@@ -78,6 +82,12 @@ class BeaconFollowPlugin(Plugin):
         )
         if self.follower.loom is not None:
             self.follower.loom.tau_limit_s = _env_f("FOLLOW_TAU_S", 1.2)
+        if self.follower.drift is not None:
+            d = self.follower.drift.cfg
+            d.k_roll = _env_f("DRIFT_K_ROLL", d.k_roll)
+            d.k_pitch = _env_f("DRIFT_K_PITCH", d.k_pitch)
+            d.max_roll = _env_f("DRIFT_MAX_ROLL", d.max_roll)
+            d.max_pitch = _env_f("DRIFT_MAX_PITCH", d.max_pitch)
 
         from control.strategies import DirectStrategy
         self._prev_strategy = getattr(self.fc.model, "strategy", None)
@@ -130,7 +140,7 @@ class BeaconFollowPlugin(Plugin):
                 self.fc.model.land()
             elif cmd.action == "takeoff":
                 self.fc.model.takeoff()
-            self.fc.set_axes_from("beacon", throttle=0, yaw=cmd.yaw, pitch=cmd.pitch, roll=0)
+            self.fc.set_axes_from("beacon", throttle=0, yaw=cmd.yaw, pitch=cmd.pitch, roll=cmd.roll)
 
             if cmd.mode != self._last_mode or cmd.action:
                 logger.info("[BeaconFollow] %s%s%s", cmd.mode.value,
@@ -153,3 +163,77 @@ class BeaconFollowPlugin(Plugin):
         if cmd.mode.value == "BACKOFF":
             shapes.append({"type": "rect", "coords": [0.02, 0.02, 0.98, 0.98], "color": "red"})
         self.send_overlay(shapes)
+
+
+class HoverHoldPlugin(Plugin):
+    """Hold position using the front camera: cancels sideways and forward/back drift,
+    backs off if something closes in or a wall fills the view. Any key takes over."""
+
+    def _on_start(self):
+        core = _import_core()
+        dcfg = core.DriftConfig(
+            k_roll=_env_f("DRIFT_K_ROLL", 1.2),
+            k_pitch=_env_f("DRIFT_K_PITCH", 0.8),
+            max_roll=_env_f("DRIFT_MAX_ROLL", 0.20),
+            max_pitch=_env_f("DRIFT_MAX_PITCH", 0.15),
+        )
+        self.hold = core.HoverHold(dcfg)
+        from control.strategies import DirectStrategy
+        self._prev_strategy = getattr(self.fc.model, "strategy", None)
+        try:
+            self.fc.model.set_strategy(DirectStrategy())
+        except Exception:
+            pass
+        self._last_log = 0.0
+        logger.info("[HoverHold] started: k_roll %.2f k_pitch %.2f max roll %.2f pitch %.2f",
+                    dcfg.k_roll, dcfg.k_pitch, dcfg.max_roll, dcfg.max_pitch)
+        self.loop_thread = threading.Thread(target=self._loop, daemon=True, name="HoverHold")
+        self.loop_thread.start()
+
+    def _on_stop(self):
+        try:
+            self.fc.set_axes_from("hover", throttle=0, yaw=0, pitch=0, roll=0)
+        except Exception:
+            pass
+        try:
+            if self._prev_strategy is not None:
+                self.fc.model.set_strategy(self._prev_strategy)
+        except Exception:
+            pass
+        if self.loop_thread and threading.current_thread() is not self.loop_thread:
+            self.loop_thread.join(timeout=1.0)
+        logger.info("[HoverHold] stopped")
+
+    def _loop(self):
+        import cv2
+        for frame in self.frames:
+            if not self.running:
+                break
+            if hasattr(frame, "format") and frame.format == "jpeg":
+                img = cv2.imdecode(np.frombuffer(frame.data, np.uint8), cv2.IMREAD_COLOR)
+            elif isinstance(frame, np.ndarray):
+                img = frame
+            else:
+                continue
+            if img is None:
+                continue
+            t = time.monotonic()
+            try:
+                cmd = self.hold.update(img, t)
+            except Exception as e:
+                logger.warning("[HoverHold] frame error: %s", e)
+                cmd = None
+            if cmd is None:
+                self.fc.set_axes_from("hover", throttle=0, yaw=0, pitch=0, roll=0)
+                continue
+            self.fc.set_axes_from("hover", throttle=0, yaw=0, pitch=cmd.pitch, roll=cmd.roll)
+            if t - self._last_log > 1.0:
+                self._last_log = t
+                loom = self.hold.loom
+                logger.info("[HoverHold] %s slide=%+.3f/s expand=%+.3f/s -> roll %+.2f pitch %+.2f%s",
+                            cmd.mode.value, loom.last_side_rate, loom.last_rate, cmd.roll, cmd.pitch,
+                            f" ({cmd.reason})" if cmd.reason else "")
+            if cmd.mode.value == "BACKOFF":
+                self.send_overlay([{"type": "rect", "coords": [0.02, 0.02, 0.98, 0.98], "color": "red"}])
+            else:
+                self.send_overlay([])

@@ -61,6 +61,7 @@ class LoomingDetector:
         self.last_tau: Optional[float] = None
         self.last_rate = 0.0
         self.last_texture = 0.0
+        self.last_side_rate = 0.0     # picture sliding sideways, image widths per second (+ = right)
         self.blind = False            # too little detail to judge distance
         self.blanked = False          # view suddenly went flat: something filling the camera
         self._texture_baseline: Optional[float] = None
@@ -80,6 +81,8 @@ class LoomingDetector:
         self._update_texture(grey)
         if prev is None or prev_t is None or t <= prev_t or self.blind:
             self._streak = 0
+            self.last_side_rate = 0.0
+            self.last_rate = 0.0
             return False
         flow = cv2.calcOpticalFlowFarneback(prev, grey, None, 0.5, 2, 9, 3, 5, 1.1, 0)
         h, w = grey.shape
@@ -97,6 +100,8 @@ class LoomingDetector:
         expansion = (a + e) / 2 / (w / 2)
         rate = expansion / (t - prev_t)
         self.last_rate = float(rate)
+        # c: horizontal slide of the middle of the picture, pixels per frame.
+        self.last_side_rate = float(c / w / (t - prev_t))
         if rate > 1e-6:
             self.last_tau = float(1.0 / rate)
         if self.last_tau is not None and self.last_tau < self.tau_limit_s:
@@ -132,6 +137,55 @@ class LoomingDetector:
         else:
             self._blank_streak = 0
         self.blanked = self._blank_streak >= 2
+
+
+# --------------------------------------------------------------------------- drift hold
+
+@dataclass
+class DriftConfig:
+    k_roll: float = 1.2          # roll per (image width per second) of sideways slide
+    k_pitch: float = 0.8         # pitch per (1/s) of expansion
+    max_roll: float = 0.20
+    max_pitch: float = 0.15
+    deadband_side: float = 0.03  # ignore slides slower than this (image widths per second)
+    deadband_expand: float = 0.08
+    alpha: float = 0.35          # smoothing of the measurements (0..1, higher = faster)
+
+
+class DriftHold:
+    """Cancels drift the drone's own position hold misses, using the front camera.
+
+    Sliding right makes the picture slide left (side_rate < 0): roll left to stop it.
+    Creeping forward makes the picture expand (rate > 0): pitch back. Only used when the
+    drone is not being told to turn (turning also slides the picture) and the view has
+    enough detail; otherwise it resets and returns zero. Forward correction is never
+    given when the view is plain.
+    """
+
+    def __init__(self, cfg: Optional[DriftConfig] = None):
+        self.cfg = cfg or DriftConfig()
+        self._side = 0.0
+        self._expand = 0.0
+
+    def reset(self) -> None:
+        self._side = self._expand = 0.0
+
+    def update(self, side_rate: float, expand_rate: float, turning: bool, blind: bool) -> tuple[float, float]:
+        c = self.cfg
+        if turning or blind:
+            self.reset()
+            return 0.0, 0.0
+        self._side += c.alpha * (side_rate - self._side)
+        self._expand += c.alpha * (expand_rate - self._expand)
+        roll = 0.0
+        if abs(self._side) > c.deadband_side:
+            roll = c.k_roll * (self._side - math.copysign(c.deadband_side, self._side))
+        pitch = 0.0
+        if abs(self._expand) > c.deadband_expand:
+            pitch = -c.k_pitch * (self._expand - math.copysign(c.deadband_expand, self._expand))
+        roll = max(-c.max_roll, min(c.max_roll, roll))
+        pitch = max(-c.max_pitch, min(c.max_pitch, pitch))
+        return roll, pitch
 
 
 # --------------------------------------------------------------------------- governor
@@ -170,6 +224,7 @@ class Command:
     action: Optional[str] = None     # "land" or "takeoff", once
     mode: Mode = Mode.FOLLOW
     reason: str = ""
+    roll: float = 0.0
 
 
 @dataclass
@@ -299,6 +354,7 @@ class BeaconFollower:
                              kp_yaw=kp_yaw, yaw_max=yaw_max, kp_pitch=kp_pitch, pitch_max=pitch_max)
         self.loom = LoomingDetector() if looming else None
         self.gov = SafetyGovernor(gov_cfg or GovernorConfig())
+        self.drift = DriftHold() if looming else None
         self.last_hit = None
         self.last_blobs: list = []
 
@@ -311,4 +367,36 @@ class BeaconFollower:
         if self.loom is not None:
             looming = self.loom.update(img_bgr, t) or self.loom.blanked
             blind = self.loom.blind
-        return self.gov.step(t, hit, raw_yaw, raw_pitch, looming, blind)
+        cmd = self.gov.step(t, hit, raw_yaw, raw_pitch, looming, blind)
+        if self.drift is not None and cmd.mode in (Mode.FOLLOW, Mode.HOLD) and not cmd.action:
+            turning = abs(cmd.yaw) > 0.05
+            roll, dpitch = self.drift.update(self.loom.last_side_rate, self.loom.last_rate, turning, blind)
+            cmd.roll = roll
+            # Drift correction adds to pitch only when following is not already moving it.
+            if abs(cmd.pitch) < 0.05:
+                cmd.pitch = max(-self.gov.cfg.max_pitch, min(self.gov.cfg.max_pitch, cmd.pitch + dpitch))
+        elif self.drift is not None:
+            self.drift.reset()
+        return cmd
+
+
+class HoverHold:
+    """Hold still with the camera: drift hold + back off on looming / a wall filling the view."""
+
+    def __init__(self, drift_cfg: Optional[DriftConfig] = None, backoff_s: float = 0.8, backoff_pitch: float = -0.25):
+        self.loom = LoomingDetector()
+        self.drift = DriftHold(drift_cfg)
+        self.backoff_s = backoff_s
+        self.backoff_pitch = backoff_pitch
+        self._backoff_until = -1.0
+
+    def update(self, img_bgr: np.ndarray, t: float) -> Command:
+        looming = self.loom.update(img_bgr, t) or self.loom.blanked
+        if looming:
+            self._backoff_until = t + self.backoff_s
+        if t < self._backoff_until:
+            self.drift.reset()
+            return Command(pitch=self.backoff_pitch, mode=Mode.BACKOFF, reason="something closing in")
+        roll, pitch = self.drift.update(self.loom.last_side_rate, self.loom.last_rate, False, self.loom.blind)
+        reason = "view too plain: holding blind" if self.loom.blind else ""
+        return Command(pitch=pitch, roll=roll, mode=Mode.HOLD, reason=reason)

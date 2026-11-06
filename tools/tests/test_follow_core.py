@@ -179,3 +179,49 @@ def test_blind_view_forbids_forward_but_allows_turn_and_back():
     for i in range(30):
         back = gov.step(t + (i + 2) / FPS, Hit(), 0.0, -0.3, False, blind=True)
     assert back.pitch < 0
+
+
+# ------------------------------------------------------------------ drift hold
+
+from follow_core import HoverHold  # noqa: E402
+
+
+def hover_run(frames):
+    h, cmds = HoverHold(), []
+    for i, img in enumerate(frames):
+        cmds.append(h.update(img, i / FPS))
+    return cmds
+
+
+def test_drifting_right_rolls_left():
+    base = texture()
+    cmds = hover_run([shifted(base, -4 * i) for i in range(15)])   # picture slides left
+    assert cmds[-1].roll < -0.05 and cmds[-1].mode == Mode.HOLD
+
+
+def test_drifting_left_rolls_right():
+    base = texture()
+    cmds = hover_run([shifted(base, 4 * i) for i in range(15)])
+    assert cmds[-1].roll > 0.05
+
+
+def test_creeping_forward_pitches_back():
+    base, scale, frames = texture(), 1.0, []
+    for i in range(15):
+        scale *= 1.02                     # slow approach: not looming, but creeping
+        frames.append(zoomed(base, scale))
+    cmds = hover_run(frames)
+    assert cmds[-1].mode == Mode.HOLD and cmds[-1].pitch < 0
+
+
+def test_still_view_holds_without_correction():
+    base = texture()
+    cmds = hover_run([base] * 15)
+    assert cmds[-1].roll == 0 and cmds[-1].pitch == 0
+
+
+def test_no_drift_correction_while_turning():
+    from follow_core import DriftHold
+    d = DriftHold()
+    assert d.update(-0.5, 0.0, turning=True, blind=False) == (0.0, 0.0)
+    assert d.update(-0.5, 0.0, turning=False, blind=True) == (0.0, 0.0)

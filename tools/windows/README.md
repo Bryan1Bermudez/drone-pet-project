@@ -151,6 +151,20 @@ First test with PROPS OFF: open `tools/strobe.html` full screen on the monitor, 
 drone's camera at it, click Takeoff (motors spin), switch the plugin ON, and watch the
 lime box and the commands; move the drone by hand to see it react.
 
+## Drift hold (HoverHoldPlugin)
+
+Sideways drift is the drone's own position hold losing track: its downward optical-flow
+camera needs good light and a patterned floor (about 0.3 to 2 m up). HoverHoldPlugin
+watches the front camera: when the picture slides sideways it rolls the other way, when
+it slowly expands (creeping forward) it pitches back, and it backs off if something closes
+in or a wall fills the view. It does nothing while turning or when the view is too plain.
+Follow mode uses the same correction. Strength: `DRIFT_K_ROLL` / `DRIFT_K_PITCH` in
+`backend\.env` (raise if it still drifts, lower if it wobbles). The backend logs
+`[HoverHold] slide=... -> roll ...` once a second.
+
+Sign check with PROPS OFF: switch HoverHoldPlugin ON and slide the drone slowly to the
+right by hand: the log should show `slide` negative and `roll` negative (push left).
+
 ## Obstacle avoidance on the F19: what is known, and how to find the command
 
 Facts (checked 6 Nov 2026):
