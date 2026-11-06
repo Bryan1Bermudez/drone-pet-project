@@ -337,6 +337,25 @@ EDITS: list[tuple] = [
         "def _note_mcu(self, payload: bytes) -> None:  # drone-pet-project patch",
     ),
     (
+        # Packet-type census: every 10 s, list the kinds of packets the drone sent, so an
+        # absent status report can be told apart from a report in an unexpected shape.
+        "backend/protocols/wifi_uav_video_protocol.py",
+        "        if len(payload) < 12 or payload[0] != 0x93 or payload[1] == 0x01:\n"
+        "            return\n",
+        "        if len(payload) >= 2:  # drone-pet-project patch: packet-type census\n"
+        "            if not hasattr(self, \"_type_census\"):\n"
+        "                self._type_census, self._type_census_ts = {}, time.time()\n"
+        "            k = payload[:2].hex(\" \")\n"
+        "            self._type_census[k] = self._type_census.get(k, 0) + 1\n"
+        "            if time.time() - self._type_census_ts > 10.0:\n"
+        "                self._type_census_ts = time.time()\n"
+        "                logger.info(\"[drone-packets] last 10 s by first two bytes: %s\",\n"
+        "                            \", \".join(f\"{a}: {b}\" for a, b in sorted(self._type_census.items())))\n"
+        "                self._type_census = {}\n"
+        "        if len(payload) < 12 or payload[0] != 0x93 or payload[1] == 0x01:\n"
+        "            return\n",
+    ),
+    (
         # Probe bits: extra bits OR-ed into command byte 6 and mode byte 7 of every stick
         # packet, set from the control socket ("raw_bits"), to search for an undocumented
         # command such as obstacle avoidance. Zero unless tools/oa_probe.py sets them.
