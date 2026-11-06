@@ -21,7 +21,8 @@
 
 param(
     [string]$Turbodrone = "",
-    [string]$DroneSsid = ""
+    [string]$DroneSsid = "",
+    [switch]$Indoor
 )
 
 $ErrorActionPreference = "Continue"
@@ -222,12 +223,23 @@ try {
 
     Step "6. Starting Turbodrone"
     $env:DRONE_IP = $droneIp
+    if ($Indoor) {
+        # Small rooms: slow moves, gentle sticks, slow climbs (these override backend\.env).
+        $env:WIFI_UAV_SPEED_INDEX = "0"
+        $env:WIFI_UAV_THROTTLE_SPEED_INDEX = "0"
+        $env:WIFI_UAV_PROFILE = "precise"
+        Write-Host "  Indoor mode: Low speed, gentle sticks, slow climbs." -ForegroundColor Green
+        Write-Host "  (Click 'Low' on the page's Speed buttons too, so the page matches.)" -ForegroundColor Yellow
+    }
     $backend = Start-Process cmd.exe -ArgumentList '/k title Drone backend & venv\Scripts\python.exe -m uvicorn web_server:app' -WorkingDirectory (Join-Path $turbo "backend") -PassThru
     $frontend = Start-Process cmd.exe -ArgumentList '/k title Drone frontend & npm.cmd run dev' -WorkingDirectory (Join-Path $turbo "frontend") -PassThru
     Start-Sleep -Seconds 7
     Start-Process "http://localhost:5173"
     Write-Host ""
-    Write-Host "Running. C = calibrate (on the floor), Space = emergency stop, speed starts Low." -ForegroundColor Cyan
+    Write-Host "Running. Keys on the control page:" -ForegroundColor Cyan
+    Write-Host "  C = calibrate gyro (on a flat floor, before takeoff)   Space = emergency motor stop"
+    Write-Host "  Trim (if it keeps drifting one way, nudge the opposite way; saved between flights):"
+    Write-Host "    I / K = forward / back    J / L = left / right    U / O = turn left / right    0 = reset"
     Write-Host "Your PC is still on home Wi-Fi."
     Read-Host "Press Enter HERE to stop"
 }

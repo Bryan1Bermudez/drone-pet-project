@@ -51,6 +51,12 @@ makes the phone forget the drone's network.
 5. Starts Turbodrone. The patched video code first sends an empty packet to udp/1234
    (where the video comes from) so the phone's NAT lets the video back in.
 
+`start_drone_indoor.bat`: the same, with Low speed, gentle sticks and slow climbs.
+
+On the control page: C calibrates the gyro (on the floor), Space stops the motors,
+I/K J/L U/O trim pitch/roll/yaw by 2 steps (saved in `turbodrone\backend\trim.json`),
+0 resets trim.
+
 `start_drone_pc_wifi.bat` is the old mode where the PC's own Wi-Fi joins the drone. Not
 used by default.
 

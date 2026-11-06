@@ -22,6 +22,8 @@ What it changes (each edit is marked "drone-pet-project patch"):
 * backend: video frame requests carry the live stick command instead of a fixed
   neutral one (stock behaviour flooded out the real sticks once video streamed);
   one-shot takeoff/land/stop/calibrate/flip bits stay in the RC packets only.
+* backend + frontend: trim (I/K pitch, J/L roll, U/O yaw, 0 reset), added to the
+  stick bytes and saved to backend/trim.json, to cancel steady drift.
 * frontend: speed selector starts on "Medium"; key C = gyro calibration (on the
   ground only), Space = emergency motor stop.
 
@@ -188,6 +190,99 @@ EDITS: list[tuple] = [
         "        return body + bytes([xor, 0x99])\n"
         "\n"
         "    def _safe_sendto(self, payload: bytes, port: int, label: str) -> bool:\n",
+    ),
+    (
+        # Trim: steady offsets added to roll/pitch/yaw so a drone that always drifts one
+        # way can be nudged back, like the trim buttons on a toy remote. Applied to the
+        # final stick bytes, so the live command in video requests includes it too.
+        "backend/protocols/wifi_uav_rc_protocol_adapter.py",
+        "        controls: List[int] = axis_controls + [\n",
+        "        trim = {\"R\": int(getattr(self, \"trim_roll\", 0)), \"P\": int(getattr(self, \"trim_pitch\", 0)),\n"
+        "                \"Y\": int(getattr(self, \"trim_yaw\", 0))}  # drone-pet-project patch: trim\n"
+        "        axis_controls = [max(0, min(255, v + trim.get(lbl, 0))) for v, lbl in zip(axis_controls, axis_labels)]\n"
+        "        controls: List[int] = axis_controls + [\n",
+    ),
+    (
+        "backend/web_server.py",
+        "@app.websocket(\"/ws\")\n",
+        "# drone-pet-project patch: trim, saved next to this file so it survives restarts\n"
+        "_TRIM_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), \"trim.json\")\n"
+        "\n"
+        "\n"
+        "def _save_trim(rc) -> None:\n"
+        "    import json as _json\n"
+        "    try:\n"
+        "        with open(_TRIM_FILE, \"w\") as f:\n"
+        "            _json.dump({a: int(getattr(rc, f\"trim_{a}\", 0)) for a in (\"roll\", \"pitch\", \"yaw\")}, f)\n"
+        "    except Exception:\n"
+        "        pass\n"
+        "\n"
+        "\n"
+        "def _load_trim(rc) -> None:\n"
+        "    import json as _json\n"
+        "    try:\n"
+        "        with open(_TRIM_FILE) as f:\n"
+        "            for a, v in _json.load(f).items():\n"
+        "                if a in (\"roll\", \"pitch\", \"yaw\"):\n"
+        "                    setattr(rc, f\"trim_{a}\", max(-40, min(40, int(v))))\n"
+        "        logger.info(\"[drone-pet-project] trim loaded: roll=%+d pitch=%+d yaw=%+d\",\n"
+        "                    rc.trim_roll if hasattr(rc, 'trim_roll') else 0,\n"
+        "                    rc.trim_pitch if hasattr(rc, 'trim_pitch') else 0,\n"
+        "                    rc.trim_yaw if hasattr(rc, 'trim_yaw') else 0)\n"
+        "    except FileNotFoundError:\n"
+        "        pass\n"
+        "    except Exception:\n"
+        "        logger.warning(\"[drone-pet-project] could not read %s\", _TRIM_FILE)\n"
+        "\n"
+        "\n"
+        "@app.websocket(\"/ws\")\n",
+    ),
+    (
+        "backend/web_server.py",
+        "        rc_proto = WifiUavRcProtocolAdapter(drone_ip, ctrl_port, variant=wifi_uav_variant)\n",
+        "        rc_proto = WifiUavRcProtocolAdapter(drone_ip, ctrl_port, variant=wifi_uav_variant)\n"
+        "        _load_trim(rc_proto)  # drone-pet-project patch\n",
+    ),
+    (
+        "backend/web_server.py",
+        "            elif msg_type == \"takeoff\":\n",
+        "            elif msg_type == \"trim\":  # drone-pet-project patch: drift trim\n"
+        "                rc = flight_controller.protocol\n"
+        "                axis = str(data.get(\"axis\", \"\"))\n"
+        "                if axis == \"reset\":\n"
+        "                    for a in (\"roll\", \"pitch\", \"yaw\"):\n"
+        "                        setattr(rc, f\"trim_{a}\", 0)\n"
+        "                elif axis in (\"roll\", \"pitch\", \"yaw\"):\n"
+        "                    v = int(getattr(rc, f\"trim_{axis}\", 0)) + int(data.get(\"delta\", 0))\n"
+        "                    setattr(rc, f\"trim_{axis}\", max(-40, min(40, v)))\n"
+        "                _save_trim(rc)\n"
+        "                logger.info(\"[drone-pet-project] trim roll=%+d pitch=%+d yaw=%+d\",\n"
+        "                            getattr(rc, \"trim_roll\", 0), getattr(rc, \"trim_pitch\", 0), getattr(rc, \"trim_yaw\", 0))\n"
+        "            elif msg_type == \"takeoff\":\n",
+    ),
+    (
+        # Trim keys: I/K pitch, J/L roll, U/O yaw, 0 resets. 2 stick steps per press.
+        "frontend/src/hooks/useControls.ts",
+        "  /* ------------- helpers / commands ------------------------- */\n",
+        "  /* drone-pet-project patch: trim keys */\n"
+        "  useEffect(() => {\n"
+        "    const keys: Record<string, [string, number]> = {\n"
+        "      i: [\"pitch\", 2], k: [\"pitch\", -2], l: [\"roll\", 2], j: [\"roll\", -2],\n"
+        "      o: [\"yaw\", 2], u: [\"yaw\", -2], \"0\": [\"reset\", 0],\n"
+        "    };\n"
+        "    const down = (e: KeyboardEvent) => {\n"
+        "      const k = keys[e.key.toLowerCase()];\n"
+        "      if (!k) return;\n"
+        "      e.preventDefault();\n"
+        "      if (ws.current?.readyState === WebSocket.OPEN) {\n"
+        "        ws.current.send(JSON.stringify({ type: \"trim\", axis: k[0], delta: k[1] }));\n"
+        "      }\n"
+        "    };\n"
+        "    window.addEventListener(\"keydown\", down);\n"
+        "    return () => window.removeEventListener(\"keydown\", down);\n"
+        "  }, []);\n"
+        "\n"
+        "  /* ------------- helpers / commands ------------------------- */\n",
     ),
     (
         # Watchdog: the page sends sticks 30 times a second. If it stops (window

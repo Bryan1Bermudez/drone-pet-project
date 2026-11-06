@@ -81,7 +81,9 @@ at JPEG header/colour handling later.
 with the PC on home Wi-Fi** (`tools/windows/start_drone.bat`). Remaining: hard to fly by
 hand and drifts toward obstacles (keyboard is all-or-nothing; try Low speed now that the
 neutral-command flood is fixed, a gamepad, good light for the optical-flow hover, gyro
-calibration); very loud (hardware). Next: drive Turbodrone from the blink tracker.
+calibration); very loud (hardware). Added trim keys and `start_drone_indoor.bat`.
+Obstacle avoidance: remote-button only; test whether it stays on under PC control.
+Next: drive Turbodrone from the blink tracker; later a camera-based drift/looming assist.
 
 ## The drone: what to get (original shortlist)
 
