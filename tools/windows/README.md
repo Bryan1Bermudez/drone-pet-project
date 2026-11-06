@@ -136,7 +136,9 @@ pitch (the drone holds its own height). Safety layer (`tools/follow_core.py`, te
 
 - speed cap (yaw 0.35, pitch 0.30 of full stick, before the speed tier) and smooth changes
 - looming: if something in view would reach the drone within 1.2 s, back off for 0.8 s
-  (cannot see plain, textureless walls)
+- plain walls: if the view has too little detail to judge distance, no forward at all
+  (turn and back up only); if the detail suddenly collapses (a wall or door filling the
+  camera), back off as for looming
 - beacon lost: hover in place, land after 6 s (15 s grace at start while the beacon is
   first confirmed)
 - land-and-wait: wearer still for 20 s -> land; `FOLLOW_RELAUNCH=1` makes it take off

@@ -152,3 +152,30 @@ def test_beacon_right_of_centre_turns_right_within_cap():
         b.draw(frame, t)
         cmd = f.update(frame, t)
     assert cmd.mode == Mode.FOLLOW and 0 < cmd.yaw <= 0.35
+
+
+# ------------------------------------------------------------------ plain walls
+
+def test_wall_filling_the_view_is_caught():
+    base, det = texture(), LoomingDetector()
+    for i in range(10):
+        det.update(base, i / FPS)                     # normal, detailed view
+    assert not det.blind and not det.blanked
+    wall = np.full_like(base, 150)
+    hits = [det.update(wall, (10 + i) / FPS) or det.blanked for i in range(3)]
+    assert det.blind and any(hits)
+
+
+def test_blind_view_forbids_forward_but_allows_turn_and_back():
+    gov = SafetyGovernor(GovernorConfig(rest_after_s=0))
+    cmds, t = run(gov, 2.0, yaw=0.3, pitch=0.3)
+    assert cmds[-1].pitch > 0
+    cmds = []
+    for i in range(30):
+        t += 1 / FPS
+        cmds.append(gov.step(t, Hit(), 0.3, 0.3, False, blind=True))
+    assert cmds[-1].pitch == 0 and cmds[-1].yaw > 0
+    back = gov.step(t + 1 / FPS, Hit(), 0.0, -0.3, False, blind=True)
+    for i in range(30):
+        back = gov.step(t + (i + 2) / FPS, Hit(), 0.0, -0.3, False, blind=True)
+    assert back.pitch < 0

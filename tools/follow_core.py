@@ -5,7 +5,9 @@ headless in tools/tests/test_follow_core.py.
 
 Pieces:
   Pipeline (webcam_follow.py)   colour blobs -> blink filter -> follow logic (yaw/pitch)
-  LoomingDetector               notices something in view growing fast (closing in)
+  LoomingDetector               notices something in view growing fast (closing in),
+                                a view too plain to judge distance, and a view that
+                                suddenly goes flat (a wall filling the camera)
   SafetyGovernor                speed cap + smooth changes, back off on looming,
                                 hover then land when the beacon is lost,
                                 land-and-wait when the wearer stands still,
@@ -41,8 +43,9 @@ class LoomingDetector:
     (a + e) / 2 is the expansion per frame. Turning the drone moves the image
     sideways (c, f) without expanding it, so yawing does not trigger it.
     Time to contact tau = 1 / (expansion per second). Looming = tau below the limit
-    for `confirm` frames in a row. Plain walls with no texture give no flow, so this
-    cannot see them: keep the speed cap.
+    for `confirm` frames in a row. Plain walls give no flow, so two extra rules cover
+    them: `blind` (too little detail: forward is forbidden) and `blanked` (detail
+    suddenly collapsed: treated like looming, back off).
     """
 
     def __init__(self, width: int = 96, height: int = 72, tau_limit_s: float = 1.2,
@@ -57,6 +60,11 @@ class LoomingDetector:
         self._streak = 0
         self.last_tau: Optional[float] = None
         self.last_rate = 0.0
+        self.last_texture = 0.0
+        self.blind = False            # too little detail to judge distance
+        self.blanked = False          # view suddenly went flat: something filling the camera
+        self._texture_baseline: Optional[float] = None
+        self._blank_streak = 0
 
     def reset(self) -> None:
         self._prev = None
@@ -69,7 +77,8 @@ class LoomingDetector:
         prev, prev_t = self._prev, self._prev_t
         self._prev, self._prev_t = grey, t
         self.last_tau = None
-        if prev is None or prev_t is None or t <= prev_t or float(grey.std()) < self.min_texture:
+        self._update_texture(grey)
+        if prev is None or prev_t is None or t <= prev_t or self.blind:
             self._streak = 0
             return False
         flow = cv2.calcOpticalFlowFarneback(prev, grey, None, 0.5, 2, 9, 3, 5, 1.1, 0)
@@ -95,6 +104,34 @@ class LoomingDetector:
         else:
             self._streak = 0
         return self._streak >= self.confirm
+
+
+    def _update_texture(self, grey: np.ndarray) -> None:
+        """Detail in the middle of the view (Laplacian spread, robust to brightness).
+
+        Plain walls and doors up close have almost none, and the flow-based looming
+        test cannot see them. blind: too little detail now; blanked: detail collapsed
+        to under a third of its recent level for 2 frames (something filling the view).
+        """
+        import cv2
+        h, w = grey.shape
+        mx, my = int(w * (1 - self.centre) / 2), int(h * (1 - self.centre) / 2)
+        mid = grey[my:h - my, mx:w - mx]
+        tex = float(cv2.Laplacian(mid, cv2.CV_32F).std())
+        self.last_texture = tex
+        self.blind = tex < self.min_texture
+        base = self._texture_baseline
+        if base is None:
+            self._texture_baseline = tex
+        elif tex > base:
+            self._texture_baseline = base + 0.2 * (tex - base)    # rise quickly
+        else:
+            self._texture_baseline = base + 0.02 * (tex - base)   # fall slowly
+        if base is not None and base > 2 * self.min_texture and tex < base / 3:
+            self._blank_streak += 1
+        else:
+            self._blank_streak = 0
+        self.blanked = self._blank_streak >= 2
 
 
 # --------------------------------------------------------------------------- governor
@@ -158,7 +195,8 @@ class SafetyGovernor:
         step = self.cfg.slew_per_s * dt
         return current + max(-step, min(step, target - current))
 
-    def step(self, t: float, hit, raw_yaw: float, raw_pitch: float, looming: bool) -> Command:
+    def step(self, t: float, hit, raw_yaw: float, raw_pitch: float, looming: bool,
+             blind: bool = False) -> Command:
         c = self.cfg
         dt = 0.0 if self._last_t is None else max(0.0, min(t - self._last_t, 0.3))
         self._last_t = t
@@ -229,6 +267,9 @@ class SafetyGovernor:
         # ---- follow, capped and smoothed -------------------------------------------
         target_yaw = max(-c.max_yaw, min(c.max_yaw, raw_yaw))
         target_pitch = max(-c.max_pitch, min(c.max_pitch, raw_pitch))
+        if blind and target_pitch > 0:
+            target_pitch = 0.0       # cannot judge distance: turn or back up, never forward
+            reason = "view too plain to judge distance: no forward"
         self._yaw = self._slew(target_yaw, self._yaw, dt)
         self._pitch = self._slew(target_pitch, self._pitch, dt)
 
@@ -266,5 +307,8 @@ class BeaconFollower:
         self.last_blobs, self.last_hit = blobs, hit
         raw_yaw = stick_pct(out.yaw) / 100.0 if hit is not None else 0.0
         raw_pitch = stick_pct(out.pitch) / 100.0 if hit is not None else 0.0
-        looming = self.loom.update(img_bgr, t) if self.loom is not None else False
-        return self.gov.step(t, hit, raw_yaw, raw_pitch, looming)
+        looming = blind = False
+        if self.loom is not None:
+            looming = self.loom.update(img_bgr, t) or self.loom.blanked
+            blind = self.loom.blind
+        return self.gov.step(t, hit, raw_yaw, raw_pitch, looming, blind)
